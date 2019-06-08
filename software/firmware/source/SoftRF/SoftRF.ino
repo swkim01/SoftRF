@@ -109,7 +109,7 @@ void setup()
 
   Serial.begin(38400);
 
-#if LOGGER_IS_ENABLED
+#if LOGGER_IS_ENABLED && !defined(SDGPXLOG)
   Logger_setup();
 #endif /* LOGGER_IS_ENABLED */
 
@@ -162,6 +162,9 @@ void setup()
   if (SoC->Bluetooth) {
      SoC->Bluetooth->setup();
   }
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+  Logger_setup();
+#endif /* LOGGER_IS_ENABLED */
 
   OTA_setup();
   Web_setup();

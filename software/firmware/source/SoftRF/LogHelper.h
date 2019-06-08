@@ -23,9 +23,24 @@
 
 #if LOGGER_IS_ENABLED
 
+#ifdef SDGPXLOG
+#include <TinyGPS++.h>
+
+#define SAMPLE_INTERVAL_MS 1000
+#define SAMPLE_INTERVAL 5
+
+extern TinyGPSPlus gnss;
+
+enum
+{
+        LOGGER_OFF,
+        LOGGER_SD
+};
+#else
 #include <FS.h>
 
 extern File LogFile;
+#endif
 void Logger_setup(void);
 void Logger_loop(void);
 void Logger_fini(void);

@@ -28,6 +28,9 @@
 #include "D1090Helper.h"
 #include "JSONHelper.h"
 #include "BatteryHelper.h"
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+#include "LogHelper.h"
+#endif
 
 // start reading from the first byte (address 0) of the EEPROM
 
@@ -77,6 +80,9 @@ void EEPROM_defaults()
   eeprom_block.field.settings.volume = BUZZER_VOLUME_FULL;
   eeprom_block.field.settings.pointer = DIRECTION_NORTH_UP;
   eeprom_block.field.settings.bluetooth = BLUETOOTH_OFF;
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+  eeprom_block.field.settings.logger = LOGGER_OFF;
+#endif
   eeprom_block.field.settings.alarm = TRAFFIC_ALARM_DISTANCE;
 
   eeprom_block.field.settings.nmea_g     = true;

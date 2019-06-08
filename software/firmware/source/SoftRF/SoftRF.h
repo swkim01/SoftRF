@@ -161,9 +161,10 @@ extern void shutdown(const char *);
 //#define TEST_PAW_ON_NICERF_SV610_FW466
 #define  DO_GDL90_FF_EXT
 
-#define LOGGER_IS_ENABLED 0
+#define LOGGER_IS_ENABLED 1
+#define SDGPXLOG
 
-#if LOGGER_IS_ENABLED
+#if LOGGER_IS_ENABLED && !defined(SDGPXLOG)
 #define StdOut  LogFile
 #else
 #define StdOut  Serial

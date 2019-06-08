@@ -30,6 +30,9 @@
 #include "NMEAHelper.h"
 #include "GDL90Helper.h"
 #include "D1090Helper.h"
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+#include "LogHelper.h"
+#endif
 
 #if defined(ENABLE_AHRS)
 #include "AHRSHelper.h"
@@ -116,7 +119,7 @@ Copyright (C) 2015-2019 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 
 void handleSettings() {
 
-  size_t size = 4700;
+  size_t size = 4900;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -332,6 +335,27 @@ void handleSettings() {
     len = strlen(offset);
     offset += len;
     size -= len;
+
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>Logger Device</th>\
+<td align=right>\
+<select name='logger'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>SD</option>\
+</select>\
+</td>\
+</tr>"),
+    (settings->logger == LOGGER_OFF ? "selected" : ""), LOGGER_OFF,
+    (settings->logger == LOGGER_SD  ? "selected" : ""), LOGGER_SD
+    );
+
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+#endif
   }
 
   /* Common part 3 */
@@ -623,7 +647,11 @@ void handleRoot() {
 
 void handleInput() {
 
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+  char *Input_temp = (char *) malloc(1577);
+#else
   char *Input_temp = (char *) malloc(1520);
+#endif
   if (Input_temp == NULL) {
     return;
   }
@@ -647,6 +675,10 @@ void handleInput() {
       settings->pointer = server.arg(i).toInt();
     } else if (server.argName(i).equals("bluetooth")) {
       settings->bluetooth = server.arg(i).toInt();
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+    } else if (server.argName(i).equals("logger")) {
+      settings->logger = server.arg(i).toInt();
+#endif
     } else if (server.argName(i).equals("nmea_g")) {
       settings->nmea_g = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_p")) {
@@ -669,6 +701,43 @@ void handleInput() {
       settings->power_save = server.arg(i).toInt();
     }
   }
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+  snprintf_P ( Input_temp, 1577,
+  PSTR("<html>\
+<head>\
+<meta http-equiv='refresh' content='15; url=/'>\
+<meta name='viewport' content='width=device-width, initial-scale=1'>\
+<title>SoftRF Settings</title>\
+</head>\
+<body>\
+<h1 align=center>New settings:</h1>\
+<table width=100%%>\
+<tr><th align=left>Mode</th><td align=right>%d</td></tr>\
+<tr><th align=left>Protocol</th><td align=right>%d</td></tr>\
+<tr><th align=left>Band</th><td align=right>%d</td></tr>\
+<tr><th align=left>Aircraft type</th><td align=right>%d</td></tr>\
+<tr><th align=left>Alarm trigger</th><td align=right>%d</td></tr>\
+<tr><th align=left>Tx Power</th><td align=right>%d</td></tr>\
+<tr><th align=left>Volume</th><td align=right>%d</td></tr>\
+<tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
+<tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
+<tr><th align=left>Logger</th><td align=right>%d</td></tr>\
+<tr><th align=left>NMEA GNSS</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA Private</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA Legacy</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA Sensors</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA Out</th><td align=right>%d</td></tr>\
+<tr><th align=left>GDL90</th><td align=right>%d</td></tr>\
+<tr><th align=left>DUMP1090</th><td align=right>%d</td></tr>\
+<tr><th align=left>Stealth</th><td align=right>%s</td></tr>\
+<tr><th align=left>No track</th><td align=right>%s</td></tr>\
+<tr><th align=left>Power save</th><td align=right>%d</td></tr>\
+</table>\
+<hr>\
+  <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
+</body>\
+</html>"),
+#else
   snprintf_P ( Input_temp, 1520,
 PSTR("<html>\
 <head>\
@@ -703,9 +772,13 @@ PSTR("<html>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
+#endif
   settings->mode, settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
   settings->volume, settings->pointer, settings->bluetooth,
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+  settings->logger,
+#endif
   BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
   BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s),
   settings->nmea_out, settings->gdl90, settings->d1090,
@@ -770,7 +843,6 @@ void Web_setup()
     <meta name='viewport' content='width=device-width, initial-scale=1'>\
     <title>Firmware update</title>\
   </head>\
-<body>\
 <body>\
  <h1 align=center>Firmware update</h1>\
  <hr>\

@@ -46,6 +46,9 @@ typedef struct Settings {
     uint8_t  nmea_out:3;
 
     uint8_t  bluetooth:3; /* ESP32 built-in Bluetooth */
+#if LOGGER_IS_ENABLED && defined(SDGPXLOG)
+    uint8_t  logger:3; /* ESP32 Logger */
+#endif
     uint8_t  alarm:3;
     bool     stealth:1;
     bool     no_track:1;
