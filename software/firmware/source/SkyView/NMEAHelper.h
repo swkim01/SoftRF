@@ -1,6 +1,6 @@
 /*
  * NMEAHelper.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -112,7 +112,7 @@ typedef struct nmea_status_struct {
  * No fix when any of them is missing or lost.
  * Valid date is critical for legacy protocol (only).
  */
-#define NMEA_EXP_TIME  3500 /* 3.5 seconds */
+#define NMEA_EXP_TIME  4500 /* 4.5 seconds */
 #define isValidGNSSFix()  ( nmea.location.isValid()               && \
                             nmea.altitude.isValid()               && \
                             nmea.date.isValid()                   && \

@@ -1,6 +1,6 @@
 /*
  * View_Text_EPD.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -87,7 +87,7 @@ static void EPD_Draw_Text()
         db = DB_OGN;
         break;
       case ADDR_TYPE_ICAO:
-        db = DB_PAW;
+        db = DB_ICAO;
         break;
       case ADDR_TYPE_FLARM:
         db = DB_FLN;
@@ -96,14 +96,14 @@ static void EPD_Draw_Text()
         db = DB_OGN;
         break;
       case ADDR_TYPE_P3I:
-        db = DB_PAW;
+        db = DB_ICAO;
         break;
       case ADDR_TYPE_FANET:
         db = DB_OGN;
         break;
       default:
         if (settings->protocol == PROTOCOL_GDL90) {
-          db = DB_PAW;
+          db = DB_ICAO;
         } else {
           db = DB_FLN;
         }

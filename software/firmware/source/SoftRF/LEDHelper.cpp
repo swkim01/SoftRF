@@ -1,6 +1,6 @@
 /*
  * LEDHelper.cpp
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "SoCHelper.h"
+
+#include <TimeLib.h>
+
 #include "LEDHelper.h"
 #include "BatteryHelper.h"
-#include "SoCHelper.h"
 #include "TrafficHelper.h"
 
 static uint32_t prev_tx_packets_counter = 0;
@@ -34,10 +37,12 @@ static unsigned long status_LED_TimeMarker = 0;
 // on a live circuit...if you must, connect GND first.
 
 void LED_setup() {
-  if (settings->pointer != LED_OFF) {
+#if !defined(EXCLUDE_LED_RING)
+  if (SOC_GPIO_PIN_LED != SOC_UNUSED_PIN && settings->pointer != LED_OFF) {
     uni_begin();
     uni_show(); // Initialize all pixels to 'off'
   }
+#endif /* EXCLUDE_LED_RING */
 
   status_LED = SOC_GPIO_PIN_STATUS;
 
@@ -48,6 +53,7 @@ void LED_setup() {
   }
 }
 
+#if !defined(EXCLUDE_LED_RING)
 // Fill the dots one after the other with a color
 static void colorWipe(color_t c, uint8_t wait) {
   for (uint16_t i = 0; i < uni_numPixels(); i++) {
@@ -74,9 +80,11 @@ static void theaterChase(color_t c, uint8_t wait) {
     }
   }
 }
+#endif /* EXCLUDE_LED_RING */
 
 void LED_test() {
-  if (settings->pointer != LED_OFF) {
+#if !defined(EXCLUDE_LED_RING)
+  if (SOC_GPIO_PIN_LED != SOC_UNUSED_PIN && settings->pointer != LED_OFF) {
     // Some example procedures showing how to display to the pixels:
     colorWipe(uni_Color(255, 0, 0), 50); // Red
     colorWipe(uni_Color(0, 255, 0), 50); // Green
@@ -91,8 +99,10 @@ void LED_test() {
     //  theaterChaseRainbow(50);
     colorWipe(uni_Color(0, 0, 0), 50); // clear
   }
+#endif /* EXCLUDE_LED_RING */
 }
 
+#if !defined(EXCLUDE_LED_RING)
 static void LED_Clear_noflush() {
     for (uint16_t i = 0; i < RING_LED_NUM; i++) {
       uni_setPixelColor(i, LED_COLOR_BACKLIT);
@@ -128,23 +138,27 @@ static void LED_Clear_noflush() {
     uni_setPixelColor(LED_STATUS_SAT,
       isValidFix() ? LED_COLOR_MI_GREEN : LED_COLOR_MI_RED);
 }
+#endif /* EXCLUDE_LED_RING */
 
 void LED_Clear() {
-  if (settings->pointer != LED_OFF) {
+#if !defined(EXCLUDE_LED_RING)
+  if (SOC_GPIO_PIN_LED != SOC_UNUSED_PIN && settings->pointer != LED_OFF) {
     LED_Clear_noflush();
 
     SoC->swSer_enableRx(false);
     uni_show();
     SoC->swSer_enableRx(true);
   }
+#endif /* EXCLUDE_LED_RING */
 }
 
 void LED_DisplayTraffic() {
+#if !defined(EXCLUDE_LED_RING)
   int bearing, distance;
   int led_num;
   color_t color;
 
-  if (settings->pointer != LED_OFF) {
+  if (SOC_GPIO_PIN_LED != SOC_UNUSED_PIN && settings->pointer != LED_OFF) {
     LED_Clear_noflush();
 
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
@@ -181,17 +195,19 @@ void LED_DisplayTraffic() {
     SoC->swSer_enableRx(true);
 
   }
+#endif /* EXCLUDE_LED_RING */
 }
 
 void LED_loop() {
   if (status_LED != SOC_UNUSED_PIN) {
     if (Battery_voltage() > Battery_threshold() ) {
-      if (digitalRead(status_LED)) {
-        digitalWrite(status_LED, LOW);
+      /* Indicate positive power supply */
+      if (digitalRead(status_LED) == LOW) {
+        digitalWrite(status_LED, HIGH);
       }
     } else {
       if (isTimeToToggle()) {
-        digitalWrite(status_LED, !digitalRead(status_LED));  // toggle state
+        digitalWrite(status_LED, !digitalRead(status_LED) ? HIGH : LOW);  // toggle state
         status_LED_TimeMarker = millis();
       }
     }

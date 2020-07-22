@@ -1,6 +1,6 @@
 /*
  * OLEDHelper.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#if defined(RASPBERRY_PI)
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -240,3 +242,5 @@ void OLED_loop()
     }
   }
 }
+
+#endif /* RASPBERRY_PI */

@@ -3,7 +3,7 @@
  * Copyright (C) 2014-2015 Stanislaw Pusep
  *
  * Protocol_Legacy, encoder for legacy radio protocol
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -104,8 +104,9 @@ long obscure(uint32_t key, uint32_t seed) {
     return m2 ^ (m2 >> 16);
 }
 
+static const uint32_t table[8] = LEGACY_KEY1;
+
 void make_key(uint32_t key[4], uint32_t timestamp, uint32_t address) {
-    static const uint32_t table[8] = LEGACY_KEY1;
     int8_t i, ndx;
     for (i = 0; i < 4; i++) {
         ndx = ((timestamp >> 23) & 1) ? i+4 : i ;
@@ -266,7 +267,7 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     for (ndx = 0; ndx < sizeof (legacy_packet_t); ndx++) {
       pkt_parity += parity(*(((unsigned char *) pkt) + ndx));
     }
-     
+
     pkt->parity = (pkt_parity % 2);
 
     make_key(key, timestamp , (pkt->addr << 8) & 0xffffff);
@@ -276,9 +277,8 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     Serial.print(key[1]);   Serial.print(", ");
     Serial.print(key[2]);   Serial.print(", ");
     Serial.println(key[3]);
-#endif    
+#endif
     btea((uint32_t *) pkt + 1, 5, key);
 
     return (sizeof(legacy_packet_t));
 }
-

@@ -1,6 +1,6 @@
 /*
  * EPDHelper.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ const char EPD_SkyView_text5[] = "and LilyGO";
 const char EPD_SkyView_text6[] = "SkyView";
 const char EPD_SkyView_text7[] = "Author:";
 const char EPD_SkyView_text8[] = "Linar Yusupov";
-const char EPD_SkyView_text9[] = "Copyright (C) 2019";
+const char EPD_SkyView_text9[] = "(C) 2019-2020";
 
 unsigned long EPDTimeMarker = 0;
 bool EPD_display_frontpage = false;
@@ -60,7 +60,7 @@ void EPD_Clear_Screen()
   while (display->nextPage());
 }
 
-byte EPD_setup()
+byte EPD_setup(bool splash_screen)
 {
   byte rval = DISPLAY_NONE;
   int16_t  tbx1, tby1;
@@ -83,51 +83,56 @@ byte EPD_setup()
 
   display->init();
 
-  // first update should be full refresh
   display->setRotation(0);
-  display->setFont(&FreeMonoBold24pt7b);
   display->setTextColor(GxEPD_BLACK);
 
-  display->getTextBounds(EPD_SkyView_text1, 0, 0, &tbx1, &tby1, &tbw1, &tbh1);
-  display->getTextBounds(EPD_SkyView_text2, 0, 0, &tbx2, &tby2, &tbw2, &tbh2);
-  display->setFullWindow();
-  display->firstPage();
-  do
-  {
-    display->fillScreen(GxEPD_WHITE);
-    uint16_t x = (display->width() - tbw1) / 2;
-    uint16_t y = (display->height() + tbh1) / 2;
-    display->setCursor(x - (tbw1 / 3), y - tbh1);
-    display->print(EPD_SkyView_text1);
-    x = (display->width() - tbw2) / 2;
-    y = (display->height() + tbh2) / 2;
-    display->setCursor(x + (tbw2 / 7), y - (tbh2 - tbh1) );
-    display->print(EPD_SkyView_text2);
+  // first update should be full refresh
+  if (splash_screen) {
+    display->setFont(&FreeMonoBold24pt7b);
 
-    display->setFont(&FreeMonoOblique9pt7b);
-    display->getTextBounds(EPD_SkyView_text3, 0, 0, &tbx3, &tby3, &tbw3, &tbh3);
-    x = (display->width() - tbw3) / 2;
-    y = (display->height() + tbh3) * 3 / 4;
-    display->setCursor(x, y);
-    display->print(EPD_SkyView_text3);
-    display->setFont(&FreeMonoBoldOblique9pt7b);
-    display->getTextBounds(EPD_SkyView_text4, 0, 0, &tbx4, &tby4, &tbw4, &tbh4);
-    x = (display->width() - tbw4) / 2;
-    y += tbh3;
-    y += 3;
-    display->setCursor(x, y);
-    display->print(EPD_SkyView_text4);
+    display->getTextBounds(EPD_SkyView_text1, 0, 0, &tbx1, &tby1, &tbw1, &tbh1);
+    display->getTextBounds(EPD_SkyView_text2, 0, 0, &tbx2, &tby2, &tbw2, &tbh2);
+    display->setFullWindow();
+    display->firstPage();
+    do
+    {
+      display->fillScreen(GxEPD_WHITE);
+      uint16_t x = (display->width() - tbw1) / 2;
+      uint16_t y = (display->height() + tbh1) / 2;
+      display->setCursor(x - (tbw1 / 3), y - tbh1);
+      display->print(EPD_SkyView_text1);
+      x = (display->width() - tbw2) / 2;
+      y = (display->height() + tbh2) / 2;
+      display->setCursor(x + (tbw2 / 7), y - (tbh2 - tbh1) );
+      display->print(EPD_SkyView_text2);
 
-    if (hw_info.revision == HW_REV_T5S_1_9) {
-      display->getTextBounds(EPD_SkyView_text5, 0, 0, &tbx5, &tby5, &tbw5, &tbh5);
-      x = (display->width() - tbw5) / 2;
-      y += tbh4;
+      display->setFont(&FreeMonoOblique9pt7b);
+      display->getTextBounds(EPD_SkyView_text3, 0, 0, &tbx3, &tby3, &tbw3, &tbh3);
+      x = (display->width() - tbw3) / 2;
+      y = (display->height() + tbh3) * 3 / 4;
+      display->setCursor(x, y);
+      display->print(EPD_SkyView_text3);
+      display->setFont(&FreeMonoBoldOblique9pt7b);
+      display->getTextBounds(EPD_SkyView_text4, 0, 0, &tbx4, &tby4, &tbw4, &tbh4);
+      x = (display->width() - tbw4) / 2;
+      y += tbh3;
       y += 3;
       display->setCursor(x, y);
-      display->print(EPD_SkyView_text5);
+      display->print(EPD_SkyView_text4);
+
+      if (hw_info.revision == HW_REV_T5S_1_9 || hw_info.revision == HW_REV_T5S_2_8) {
+        display->getTextBounds(EPD_SkyView_text5, 0, 0, &tbx5, &tby5, &tbw5, &tbh5);
+        x = (display->width() - tbw5) / 2;
+        y += tbh4;
+        y += 3;
+        display->setCursor(x, y);
+        display->print(EPD_SkyView_text5);
+      }
     }
+    while (display->nextPage());
+  } else {
+    EPD_Clear_Screen();
   }
-  while (display->nextPage());
 
 //  display->powerOff();
 //  display->hibernate();

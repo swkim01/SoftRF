@@ -17,9 +17,9 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#if defined(ENERGIA_ARCH_CC13XX)
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2)
 #include <cc13xx/cc13xx.h>
-#endif /* ENERGIA_ARCH_CC13XX */
+#endif /* ENERGIA_ARCH_CC13XX || ENERGIA_ARCH_CC13X2 */
 
 #include "../lmic.h"
 #include "hal.h"
@@ -43,23 +43,30 @@ static void hal_io_init () {
     //ASSERT(lmic_pins.dio[0] != LMIC_UNUSED_PIN);
     //ASSERT(lmic_pins.dio[1] != LMIC_UNUSED_PIN || lmic_pins.dio[2] != LMIC_UNUSED_PIN);
 
+    // Write HIGH to deselect (NSS is active low). Do this before
+    // setting output, to prevent a moment of OUTPUT LOW on e.g. AVR.
+    digitalWrite(lmic_pins.nss, HIGH);
     pinMode(lmic_pins.nss, OUTPUT);
-    if (lmic_pins.rxtx[0] != LMIC_UNUSED_PIN)
-        pinMode(lmic_pins.rxtx[0], OUTPUT);
-    if (lmic_pins.rxtx[1] != LMIC_UNUSED_PIN)
-        pinMode(lmic_pins.rxtx[1], OUTPUT);
+    // Write HIGH again after setting output, for architectures that
+    // reset to LOW when setting OUTPUT (e.g. arduino-STM32L4).
+    digitalWrite(lmic_pins.nss, HIGH);
+
+    if (lmic_pins.txe != LMIC_UNUSED_PIN)
+        pinMode(lmic_pins.txe, OUTPUT);
+    if (lmic_pins.rxe != LMIC_UNUSED_PIN)
+        pinMode(lmic_pins.rxe, OUTPUT);
     if (lmic_pins.rst != LMIC_UNUSED_PIN)
         pinMode(lmic_pins.rst, OUTPUT);
 
     hal_interrupt_init();
 }
 
-// val == 1  => tx 1
-void hal_pin_rxtx (u1_t val) {
-    if (lmic_pins.rxtx[0] != LMIC_UNUSED_PIN)
-        digitalWrite(lmic_pins.rxtx[0], val);
-    if (lmic_pins.rxtx[1] != LMIC_UNUSED_PIN)
-        digitalWrite(lmic_pins.rxtx[1], !val);
+// rx = 0, tx = 1, off = -1
+void hal_pin_rxtx (s1_t val) {
+    if (lmic_pins.txe != LMIC_UNUSED_PIN)
+        digitalWrite(lmic_pins.txe, val == 1 ? HIGH : LOW);
+    if (lmic_pins.rxe != LMIC_UNUSED_PIN)
+        digitalWrite(lmic_pins.rxe, val == 0 ? HIGH : LOW);
 }
 
 // set radio RST pin to given value (or keep floating!)
@@ -69,7 +76,7 @@ void hal_pin_rst (u1_t val) {
 
     if(val == 0 || val == 1) { // drive pin
         pinMode(lmic_pins.rst, OUTPUT);
-        digitalWrite(lmic_pins.rst, val);
+        digitalWrite(lmic_pins.rst, val == 1 ? HIGH : LOW);
     } else {
         pinMode(lmic_pins.rst, INPUT);
 #if defined(RASPBERRY_PI)
@@ -183,12 +190,14 @@ static void hal_io_check() {
 //    BCM2835_CORE_CLK_HZ = 250000000
 //    Clock divider / 64 = 3.906 MHz
 static const SPISettings settings(BCM2835_SPI_CLOCK_DIVIDER_64, BCM2835_SPI_BIT_ORDER_MSBFIRST, BCM2835_SPI_MODE0);
+#elif defined(__ASR6501__)
+/* nothing to do */
 #else
 static const SPISettings settings(LMIC_SPI_FREQ, MSBFIRST, SPI_MODE0);
 #endif
 
 static void hal_spi_init () {
-#if defined(ENERGIA_ARCH_CC13XX)
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2)
     SPI.setClockDivider(SPI_CLOCK_MAX / LMIC_SPI_FREQ);
 #endif
     SPI.begin();
@@ -204,7 +213,7 @@ void hal_pin_nss (u1_t val) {
 #endif
 
     //Serial.println(val?">>":"<<");
-    digitalWrite(lmic_pins.nss, val);
+    digitalWrite(lmic_pins.nss, val ? HIGH : LOW);
 }
 
 // perform SPI transaction with radio
@@ -223,7 +232,7 @@ static u1_t spi_buf[MAX_LEN_FRAME + 1];
 
 u1_t hal_spi_read_reg (u1_t addr) {
     hal_pin_nss(0);
-#if !defined(ENERGIA_ARCH_CC13XX)
+#if !defined(ENERGIA_ARCH_CC13XX) && !defined(ENERGIA_ARCH_CC13X2)
     hal_spi(addr & 0x7F);
     u1_t val = hal_spi(0x00);
 #else
@@ -238,7 +247,7 @@ u1_t hal_spi_read_reg (u1_t addr) {
 
 void hal_spi_write_reg (u1_t addr, u1_t data) {
     hal_pin_nss(0);
-#if !defined(ENERGIA_ARCH_CC13XX)
+#if !defined(ENERGIA_ARCH_CC13XX) && !defined(ENERGIA_ARCH_CC13X2)
     hal_spi(addr | 0x80);
     hal_spi(data);
 #else
@@ -251,7 +260,7 @@ void hal_spi_write_reg (u1_t addr, u1_t data) {
 
 void hal_spi_read_buf (u1_t addr, u1_t* buf, u1_t len, u1_t inv) {
     hal_pin_nss(0);
-#if !defined(ENERGIA_ARCH_CC13XX)
+#if !defined(ENERGIA_ARCH_CC13XX) && !defined(ENERGIA_ARCH_CC13X2)
     hal_spi(addr & 0x7F);
     u1_t i=0;
     for (i=0; i<len; i++) {
@@ -274,7 +283,7 @@ void hal_spi_read_buf (u1_t addr, u1_t* buf, u1_t len, u1_t inv) {
 
 void hal_spi_write_buf (u1_t addr, u1_t* buf, u1_t len, u1_t inv) {
     hal_pin_nss(0);
-#if !defined(ENERGIA_ARCH_CC13XX)
+#if !defined(ENERGIA_ARCH_CC13XX) && !defined(ENERGIA_ARCH_CC13X2)
     hal_spi(addr | 0x80);
     u1_t i = 0;
     for (i=0; i<len; i++) {
@@ -367,6 +376,31 @@ u1_t hal_checkTimer (u4_t time) {
     return delta_time(time) <= 0;
 }
 
+#if defined(ARDUINO_ARCH_STM32)
+
+// Fix for STM32 HAL based cores.
+
+// ARDUINO_ARCH_STM32 appears to be defined for these Arduino cores:
+// - Arduino_Core_STM32 (aka stm32duino)
+// - STM32GENERIC
+// - BSFrance-stm32
+
+// This fix solves an issue with STM32 HAL based Arduino cores where
+// a call to os_init() hangs the MCU. The fix prevents LMIC-Arduino from
+// disabling and re-enabling interrupts.
+// While the exact cause is not known, it is assumed that disabling interrupts
+// may conflict with interrupts required for the STM32 HAL core.
+// (Possible side-effects on LMIC timing have not been checked.)
+
+void hal_disableIRQs () {
+}
+
+void hal_enableIRQs () {
+    hal_io_check();
+}
+
+#else /* ARDUINO_ARCH_STM32 */
+
 static uint8_t irqlevel = 0;
 
 void hal_disableIRQs () {
@@ -390,6 +424,8 @@ void hal_enableIRQs () {
     }
 }
 
+#endif /* ARDUINO_ARCH_STM32 */
+
 void hal_sleep () {
     // Not implemented
 }
@@ -408,7 +444,7 @@ void hal_printf(char *fmt, ... )
 }
 #endif
 
-void hal_init () {
+void hal_init (void *bootarg) {
     // configure radio I/O and interrupt handler
     hal_io_init();
     // configure radio SPI

@@ -1,6 +1,6 @@
 /*
  * TrafficHelper.cpp
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,6 @@
 #include "GNSSHelper.h"
 #include "WebHelper.h"
 #include "Protocol_Legacy.h"
-
-#include "SoftRF.h"
 
 unsigned long UpdateTrafficTimeMarker = 0;
 

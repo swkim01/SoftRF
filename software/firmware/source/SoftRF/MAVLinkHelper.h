@@ -1,6 +1,6 @@
 /*
  * MAVLinkHelper.h
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,6 @@
 
 #include <mavlink.h>        // Mavlink interface
 #include <aircraft.h>
-
-#include "SoftRF.h"
 
 #define isValidMAVFix() (the_aircraft.gps.fix_type == 3 /* 3D fix */ )
 

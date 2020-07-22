@@ -1,6 +1,6 @@
 /*
  * D1090Helper.cpp
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,13 +19,12 @@
 #include <adsb_encoder.h>
 #include <TimeLib.h>
 
+#include "SoCHelper.h"
 #include "D1090Helper.h"
 #include "GNSSHelper.h"
 #include "GDL90Helper.h"
 #include "EEPROMHelper.h"
-#include "SoCHelper.h"
 #include "TrafficHelper.h"
-#include "SoftRF.h"
 
 #define ADDR_TO_HEX_STR(s, c) (s += ((c) < 0x10 ? "0" : "") + String((c), HEX))
 
@@ -43,7 +42,7 @@ static void D1090_Out(byte *buf, size_t size)
   {
   case D1090_UART:
     {
-      Serial.write(buf, size);
+      SerialOutput.write(buf, size);
     }
     break;
   case D1090_BLUETOOTH:

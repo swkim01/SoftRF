@@ -38,6 +38,10 @@
 #include "raspi/raspi.h"
 #endif
 
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2)
+#include <cc13xx/cc13xx.h>
+#endif /* ENERGIA_ARCH_CC13XX || ENERGIA_ARCH_CC13X2 */
+
 #include <protocol.h>
 
 #ifdef __cplusplus
@@ -283,7 +287,7 @@ struct lmic_t {
 #endif
 
     const rf_proto_desc_t  *protocol;
-    u1_t        preamble;
+    u1_t        syncword;
 
     u1_t        noRXIQinversion;
 };

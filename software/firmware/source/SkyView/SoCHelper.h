@@ -1,6 +1,6 @@
 /*
  * SoCHelper.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
 #include "Platform_RPi.h"
 #include "Platform_ESP8266.h"
 #include "Platform_ESP32.h"
+#include "BluetoothHelper.h"
 
 typedef struct SoC_ops_struct {
   uint8_t id;
@@ -40,6 +41,7 @@ typedef struct SoC_ops_struct {
   float (*Battery_voltage)();
   void (*EPD_setup)();
   size_t (*WiFi_Receive_UDP)(uint8_t *, size_t);
+  int  (*WiFi_clients_count)();
   bool (*DB_init)();
   bool (*DB_query)(uint8_t, uint32_t, char *, size_t);
   void (*DB_fini)();
@@ -49,6 +51,7 @@ typedef struct SoC_ops_struct {
   void (*Button_fini)();
   void (*WDT_setup)();
   void (*WDT_fini)();
+  Bluetooth_ops_t *Bluetooth;
 } SoC_ops_t;
 
 enum

@@ -1,6 +1,6 @@
 /*
  * NMEAHelper.h
- * Copyright (C) 2017-2019 Linar Yusupov
+ * Copyright (C) 2017-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 #define NMEAHELPER_H
 
 #include "SoCHelper.h"
-#include "SoftRF.h"
 
 enum
 {
@@ -33,6 +32,9 @@ enum
 
 #define NMEA_BUFFER_SIZE    128
 #define NMEA_CALLSIGN_SIZE  (3 /* prefix */ + 1 /* _ */ + 6 /* ICAO */ + 1 /* EOL */)
+
+#define PSRFC_VERSION       1
+#define MAX_PSRFC_LEN       64
 
 void NMEA_setup(void);
 void NMEA_loop(void);
@@ -57,5 +59,13 @@ typedef struct NmeaTCP_struct {
 #define NMEATCP_ACK_TIMEOUT    2 /* seconds */
 
 #endif
+
+#if !defined(PFLAU_EXT1_FMT)
+#define PFLAU_EXT1_FMT  ""
+#endif /* PFLAU_EXT1_FMT */
+
+#if !defined(PFLAU_EXT1_ARGS)
+#define PFLAU_EXT1_ARGS
+#endif /* PFLAU_EXT1_ARGS */
 
 #endif /* NMEAHELPER_H */

@@ -1,6 +1,6 @@
 /*
  * Platform_ESP32.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 #include "EPDHelper.h"
 #include "EEPROMHelper.h"
 #include "WiFiHelper.h"
+#include "BluetoothHelper.h"
 
 #include "SkyView.h"
 
@@ -110,9 +111,11 @@ static union {
   uint64_t chipmacid;
 };
 
-static sqlite3 *fln_db;
-static sqlite3 *ogn_db;
-static sqlite3 *paw_db;
+static sqlite3 *fln_db  = NULL;
+static sqlite3 *ogn_db  = NULL;
+static sqlite3 *icao_db = NULL;
+
+static uint8_t sdcard_files_to_open = 0;
 
 SPIClass SPI1(HSPI);
 
@@ -148,12 +151,18 @@ static uint32_t ESP32_getFlashId()
 
 static void ESP32_fini()
 {
-  SPI1.end();
+  int mode_button_pin = SOC_BUTTON_MODE_DEF;
+
+  if (settings && (settings->adapter == ADAPTER_TTGO_T5S)) {
+    SPI1.end();
+
+    mode_button_pin = SOC_BUTTON_MODE_T5S;
+  }
 
   esp_wifi_stop();
   esp_bt_controller_disable();
 
-  esp_sleep_enable_ext0_wakeup((gpio_num_t) SOC_BUTTON_MODE_T5S, 0); // 1 = High, 0 = Low
+  esp_sleep_enable_ext0_wakeup((gpio_num_t) mode_button_pin, 0); // 1 = High, 0 = Low
 
 #if USE_IP5306_WORKAROUND
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
@@ -216,13 +225,18 @@ static void ESP32_setup()
   uint32_t flash_id = ESP32_getFlashId();
 
   /*
-   *    Board          |   Module   |  Flash memory IC
-   *  -----------------+------------+--------------------
-   *  DoIt ESP32       | WROOM      | GIGADEVICE_GD25Q32
-   *  TTGO LoRa32 V2.0 | PICO-D4 IC | GIGADEVICE_GD25Q32
-   *  TTGO T-Beam V06  |            | WINBOND_NEX_W25Q32_V
-   *  TTGO T8  V1.8    | WROVER     | GIGADEVICE_GD25LQ32
-   *  TTGO T5S V1.9    |            | WINBOND_NEX_W25Q32_V
+   *    Board         |   Module   |  Flash memory IC
+   *  ----------------+------------+--------------------
+   *  DoIt ESP32      | WROOM      | GIGADEVICE_GD25Q32
+   *  TTGO T3  V2.0   | PICO-D4 IC | GIGADEVICE_GD25Q32
+   *  TTGO T3  V2.1.6 | PICO-D4 IC | GIGADEVICE_GD25Q32
+   *  TTGO T22 V06    |            | WINBOND_NEX_W25Q32_V
+   *  TTGO T22 V08    |            | WINBOND_NEX_W25Q32_V
+   *  TTGO T22 V11    |            | BOYA_BY25Q32AL
+   *  TTGO T8  V1.8   | WROVER     | GIGADEVICE_GD25LQ32
+   *  TTGO T5S V1.9   |            | WINBOND_NEX_W25Q32_V
+   *  TTGO T5S V2.8   |            | BOYA_BY25Q32AL
+   *  TTGO T-Watch    |            | WINBOND_NEX_W25Q128_V
    */
 
   if (psramFound()) {
@@ -245,17 +259,14 @@ static void ESP32_setup()
     case MakeFlashId(WINBOND_NEX_ID, WINBOND_NEX_W25Q32_V):
       hw_info.revision = HW_REV_T5S_1_9;
       break;
+    case MakeFlashId(BOYA_ID, BOYA_BY25Q32AL):
+      hw_info.revision = HW_REV_T5S_2_8;
+      break;
     default:
       hw_info.revision = HW_REV_UNKNOWN;
       break;
     }
   }
-
-  /* SD-SPI init */
-  SPI1.begin(SOC_SD_PIN_SCK_T5S,
-             SOC_SD_PIN_MISO_T5S,
-             SOC_SD_PIN_MOSI_T5S,
-             SOC_SD_PIN_SS_T5S);
 }
 
 static uint32_t ESP32_getChipId()
@@ -363,6 +374,12 @@ static void ESP32_EPD_setup()
               SOC_GPIO_PIN_MISO_T5S,
               SOC_GPIO_PIN_MOSI_T5S,
               SOC_GPIO_PIN_SS_T5S);
+
+    /* SD-SPI init */
+    SPI1.begin(SOC_SD_PIN_SCK_T5S,
+               SOC_SD_PIN_MISO_T5S,
+               SOC_SD_PIN_MOSI_T5S,
+               SOC_SD_PIN_SS_T5S);
     break;
   }
 }
@@ -372,47 +389,84 @@ static size_t ESP32_WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
   return WiFi_Receive_UDP(buf, max_size);
 }
 
+static int ESP32_WiFi_clients_count()
+{
+  WiFiMode_t mode = WiFi.getMode();
+
+  switch (mode)
+  {
+  case WIFI_AP:
+    wifi_sta_list_t stations;
+    ESP_ERROR_CHECK(esp_wifi_ap_get_sta_list(&stations));
+
+    tcpip_adapter_sta_list_t infoList;
+    ESP_ERROR_CHECK(tcpip_adapter_get_sta_list(&stations, &infoList));
+
+    return infoList.num;
+  case WIFI_STA:
+  default:
+    return -1; /* error */
+  }
+}
+
 static bool ESP32_DB_init()
 {
+  bool rval = false;
+
   if (settings->adapter != ADAPTER_TTGO_T5S) {
-    return false;
+    return rval;
   }
 
-  if (!SD.begin(SOC_SD_PIN_SS_T5S, SPI1)) {
+  sdcard_files_to_open += (settings->adb   == DB_FLN    ? 1 : 0);
+  sdcard_files_to_open += (settings->adb   == DB_OGN    ? 1 : 0);
+  sdcard_files_to_open += (settings->adb   == DB_ICAO   ? 1 : 0);
+  sdcard_files_to_open += (settings->voice != VOICE_OFF ? 1 : 0);
+
+  if (!SD.begin(SOC_SD_PIN_SS_T5S, SPI1, 4000000, "/sd", sdcard_files_to_open)) {
     Serial.println(F("ERROR: Failed to mount microSD card."));
-    return false;
+    return rval;
+  }
+
+  if (settings->adb == DB_NONE) {
+    return rval;
   }
 
   sqlite3_initialize();
 
-  sqlite3_open("/sd/Aircrafts/fln.db", &fln_db);
+  if (settings->adb == DB_FLN) {
+    sqlite3_open("/sd/Aircrafts/fln.db", &fln_db);
 
-  if (fln_db == NULL)
-  {
-    Serial.println(F("Failed to open FlarmNet DB\n"));
-    return false;
+    if (fln_db == NULL)
+    {
+      Serial.println(F("Failed to open FlarmNet DB\n"));
+    }  else {
+      rval = true;
+    }
   }
 
-  sqlite3_open("/sd/Aircrafts/ogn.db", &ogn_db);
+  if (settings->adb == DB_OGN) {
+    sqlite3_open("/sd/Aircrafts/ogn.db", &ogn_db);
 
-  if (ogn_db == NULL)
-  {
-    Serial.println(F("Failed to open OGN DB\n"));
-    sqlite3_close(fln_db);
-    return false;
+    if (ogn_db == NULL)
+    {
+      Serial.println(F("Failed to open OGN DB\n"));
+    }  else {
+      rval = true;
+    }
   }
 
-  sqlite3_open("/sd/Aircrafts/paw.db", &paw_db);
+  if (settings->adb == DB_ICAO) {
+    sqlite3_open("/sd/Aircrafts/icao.db", &icao_db);
 
-  if (paw_db == NULL)
-  {
-    Serial.println(F("Failed to open PilotAware DB\n"));
-    sqlite3_close(fln_db);
-    sqlite3_close(ogn_db);
-    return false;
+    if (icao_db == NULL)
+    {
+      Serial.println(F("Failed to open ICAO DB\n"));
+    }  else {
+      rval = true;
+    }
   }
 
-  return true;
+  return rval;
 }
 
 static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
@@ -447,7 +501,7 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
     db_key  = "devices";
     db      = ogn_db;
     break;
-  case DB_PAW:
+  case DB_ICAO:
     switch (settings->idpref)
     {
     case ID_TAIL:
@@ -462,7 +516,7 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
       break;
     }
     db_key  = "aircrafts";
-    db      = paw_db;
+    db      = icao_db;
     break;
   case DB_FLN:
   default:
@@ -525,19 +579,21 @@ static void ESP32_DB_fini()
 {
   if (settings->adapter == ADAPTER_TTGO_T5S) {
 
-    if (fln_db != NULL) {
-      sqlite3_close(fln_db);
-    }
+    if (settings->adb != DB_NONE) {
+      if (fln_db != NULL) {
+        sqlite3_close(fln_db);
+      }
 
-    if (ogn_db != NULL) {
-      sqlite3_close(ogn_db);
-    }
+      if (ogn_db != NULL) {
+        sqlite3_close(ogn_db);
+      }
 
-    if (paw_db != NULL) {
-      sqlite3_close(paw_db);
-    }
+      if (icao_db != NULL) {
+        sqlite3_close(icao_db);
+      }
 
-    sqlite3_shutdown();
+      sqlite3_shutdown();
+    }
 
     SD.end();
   }
@@ -569,9 +625,10 @@ int readProps(File file, wavProperties_t *wavProps)
   return n;
 }
 
-static void play_file(char *filename)
+static bool play_file(char *filename)
 {
   headerState_t state = HEADER_RIFF;
+  bool rval = false;
 
   File wavfile = SD.open(filename);
 
@@ -634,71 +691,16 @@ static void play_file(char *filename)
       }
     }
     wavfile.close();
+    rval = true;
   } else {
     Serial.println(F("error opening WAV file"));
   }
   if (state == DATA) {
     i2s_driver_uninstall((i2s_port_t)i2s_num); //stop & destroy i2s driver
   }
+
+  return rval;
 }
-
-static void play_memory(const unsigned char *data, int size)
-{
-  headerState_t state = HEADER_RIFF;
-  wavRiff_t *wavRiff;
-  wavProperties_t *props;
-
-  while (size > 0) {
-    switch(state){
-    case HEADER_RIFF:
-      wavRiff = (wavRiff_t *) data;
-
-      if(wavRiff->chunkID == CCCC('R', 'I', 'F', 'F') && wavRiff->format == CCCC('W', 'A', 'V', 'E')){
-        state = HEADER_FMT;
-      }
-      data += sizeof(wavRiff_t);
-      size -= sizeof(wavRiff_t);
-      break;
-
-    case HEADER_FMT:
-      props = (wavProperties_t *) data;
-      state = HEADER_DATA;
-      data += sizeof(wavProperties_t);
-      size -= sizeof(wavProperties_t);
-      break;
-
-    case HEADER_DATA:
-      uint32_t chunkId, chunkSize;
-      chunkId = *((uint32_t *) data);
-      data += sizeof(uint32_t);
-      size -= sizeof(uint32_t);
-      chunkSize = *((uint32_t *) data);
-      state = DATA;
-      data += sizeof(uint32_t);
-      size -= sizeof(uint32_t);
-
-      //initialize i2s with configurations above
-      i2s_driver_install((i2s_port_t)i2s_num, &i2s_config, 0, NULL);
-      i2s_set_pin((i2s_port_t)i2s_num, &pin_config);
-      //set sample rates of i2s to sample rate of wav file
-      i2s_set_sample_rates((i2s_port_t)i2s_num, props->sampleRate);
-      break;
-
-      /* after processing wav file, it is time to process music data */
-    case DATA:
-      i2s_write_sample_nb(*((uint32_t *) data));
-      data += sizeof(uint32_t);
-      size -= sizeof(uint32_t);
-      break;
-    }
-  }
-
-  if (state == DATA) {
-    i2s_driver_uninstall((i2s_port_t)i2s_num); //stop & destroy i2s driver
-  }
-}
-
-#include "Melody.h"
 
 static void ESP32_TTS(char *message)
 {
@@ -733,6 +735,9 @@ static void ESP32_TTS(char *message)
           word = strtok (NULL, " ");
 
           yield();
+
+          /* Poll input source(s) */
+          Input_loop();
       }
 
       if (wdt_status) {
@@ -741,7 +746,15 @@ static void ESP32_TTS(char *message)
     }
   } else {
     if (settings->voice != VOICE_OFF && settings->adapter == ADAPTER_TTGO_T5S) {
-      play_memory(melody_wav, (int) melody_wav_len);
+
+      strcpy(filename, WAV_FILE_PREFIX);
+      strcat(filename, "POST");
+      strcat(filename, WAV_FILE_SUFFIX);
+
+      if (SD.cardType() == CARD_NONE || !play_file(filename)) {
+        /* keep boot-time SkyView logo on the screen for 7 seconds */
+        delay(7000);
+      }
     } else {
       if (hw_info.display == DISPLAY_EPD_2_7) {
         /* keep boot-time SkyView logo on the screen for 7 seconds */
@@ -814,22 +827,32 @@ void onDownButtonEvent() {
 
 static void ESP32_Button_setup()
 {
+  int mode_button_pin = settings->adapter == ADAPTER_TTGO_T5S ?
+                        SOC_BUTTON_MODE_T5S : SOC_BUTTON_MODE_DEF;
+
+  // Button(s) uses external pull up register.
+  pinMode(mode_button_pin, INPUT);
+
+  button_mode.init(mode_button_pin);
+
+  // Configure the ButtonConfig with the event handler, and enable all higher
+  // level events.
+  ButtonConfig* ModeButtonConfig = button_mode.getButtonConfig();
+  ModeButtonConfig->setEventHandler(handleEvent);
+  ModeButtonConfig->setFeature(ButtonConfig::kFeatureClick);
+  ModeButtonConfig->setFeature(ButtonConfig::kFeatureLongPress);
+  ModeButtonConfig->setDebounceDelay(15);
+  ModeButtonConfig->setClickDelay(100);
+  ModeButtonConfig->setDoubleClickDelay(1000);
+  ModeButtonConfig->setLongPressDelay(2000);
+
+  attachInterrupt(digitalPinToInterrupt(mode_button_pin), onModeButtonEvent, CHANGE );
+
   if (settings->adapter == ADAPTER_TTGO_T5S) {
-    // Button(s)) uses external pull up register.
-    pinMode(SOC_BUTTON_MODE_T5S, INPUT);
+
+    // Button(s) uses external pull up register.
     pinMode(SOC_BUTTON_UP_T5S,   INPUT);
     pinMode(SOC_BUTTON_DOWN_T5S, INPUT);
-
-    // Configure the ButtonConfig with the event handler, and enable all higher
-    // level events.
-    ButtonConfig* ModeButtonConfig = button_mode.getButtonConfig();
-    ModeButtonConfig->setEventHandler(handleEvent);
-    ModeButtonConfig->setFeature(ButtonConfig::kFeatureClick);
-    ModeButtonConfig->setFeature(ButtonConfig::kFeatureLongPress);
-    ModeButtonConfig->setDebounceDelay(15);
-    ModeButtonConfig->setClickDelay(100);
-    ModeButtonConfig->setDoubleClickDelay(1000);
-    ModeButtonConfig->setLongPressDelay(2000);
 
     ButtonConfig* UpButtonConfig = button_up.getButtonConfig();
     UpButtonConfig->setEventHandler(handleEvent);
@@ -847,7 +870,6 @@ static void ESP32_Button_setup()
     DownButtonConfig->setDoubleClickDelay(1000);
     DownButtonConfig->setLongPressDelay(2000);
 
-    attachInterrupt(digitalPinToInterrupt(SOC_BUTTON_MODE_T5S), onModeButtonEvent, CHANGE );
     attachInterrupt(digitalPinToInterrupt(SOC_BUTTON_UP_T5S),   onUpButtonEvent,   CHANGE );
     attachInterrupt(digitalPinToInterrupt(SOC_BUTTON_DOWN_T5S), onDownButtonEvent, CHANGE );
   }
@@ -855,8 +877,9 @@ static void ESP32_Button_setup()
 
 static void ESP32_Button_loop()
 {
+  button_mode.check();
+
   if (settings->adapter == ADAPTER_TTGO_T5S) {
-    button_mode.check();
     button_up.check();
     button_down.check();
   }
@@ -894,6 +917,7 @@ const SoC_ops_t ESP32_ops = {
   ESP32_Battery_voltage,
   ESP32_EPD_setup,
   ESP32_WiFi_Receive_UDP,
+  ESP32_WiFi_clients_count,
   ESP32_DB_init,
   ESP32_DB_query,
   ESP32_DB_fini,
@@ -902,7 +926,8 @@ const SoC_ops_t ESP32_ops = {
   ESP32_Button_loop,
   ESP32_Button_fini,
   ESP32_WDT_setup,
-  ESP32_WDT_fini
+  ESP32_WDT_fini,
+  &ESP32_Bluetooth_ops
 };
 
 #endif /* ESP32 */

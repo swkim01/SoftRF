@@ -1,6 +1,6 @@
 /*
  * TrafficHelper.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,7 +73,8 @@ void Traffic_setup        (void);
 void Traffic_loop         (void);
 void Traffic_ClearExpired (void);
 int  Traffic_Count        (void);
-int traffic_cmp_by_distance(const void *, const void *);
+
+int  traffic_cmp_by_distance(const void *, const void *);
 
 extern traffic_t ThisAircraft, Container[MAX_TRACKING_OBJECTS], fo, EmptyFO;
 extern traffic_by_dist_t traffic[MAX_TRACKING_OBJECTS];

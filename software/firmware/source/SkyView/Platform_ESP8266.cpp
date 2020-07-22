@@ -1,6 +1,6 @@
 /*
  * Platform_ESP8266.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -114,6 +114,31 @@ static size_t ESP8266_WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
   return WiFi_Receive_UDP(buf, max_size);
 }
 
+static int ESP8266_WiFi_clients_count()
+{
+  struct station_info *stat_info;
+  int clients = 0;
+  WiFiMode_t mode = WiFi.getMode();
+
+  switch (mode)
+  {
+  case WIFI_AP:
+    stat_info = wifi_softap_get_station_info();
+
+    while (stat_info != NULL) {
+      clients++;
+
+      stat_info = STAILQ_NEXT(stat_info, next);
+    }
+    wifi_softap_free_station_info();
+
+    return clients;
+  case WIFI_STA:
+  default:
+    return -1; /* error */
+  }
+}
+
 static bool ESP8266_DB_init()
 {
   return false;
@@ -181,6 +206,7 @@ const SoC_ops_t ESP8266_ops = {
   ESP8266_Battery_voltage,
   ESP8266_EPD_setup,
   ESP8266_WiFi_Receive_UDP,
+  ESP8266_WiFi_clients_count,
   ESP8266_DB_init,
   ESP8266_DB_query,
   ESP8266_DB_fini,
@@ -189,7 +215,8 @@ const SoC_ops_t ESP8266_ops = {
   ESP8266_Button_loop,
   ESP8266_Button_fini,
   ESP8266_WDT_setup,
-  ESP8266_WDT_fini
+  ESP8266_WDT_fini,
+  NULL
 };
 
 #endif /* ESP8266 */

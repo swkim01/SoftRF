@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#if defined(__ASR6501__) || defined(ENERGIA_ARCH_CC13X2)
+#undef min
+#undef max
+#endif
+
 #include <limits>
 
 #include "bitcount.h"

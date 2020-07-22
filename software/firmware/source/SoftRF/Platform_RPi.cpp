@@ -1,6 +1,6 @@
 /*
  * Platform_RPi.cpp
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -74,9 +74,16 @@
 // Dragino LoRa/GPS HAT or compatible SX1276 pin mapping
 lmic_pinmap lmic_pins = {
     .nss = SOC_GPIO_PIN_SS,
-    .rxtx = { LMIC_UNUSED_PIN, LMIC_UNUSED_PIN },
+    .txe = LMIC_UNUSED_PIN,
+    .rxe = LMIC_UNUSED_PIN,
     .rst = SOC_GPIO_PIN_RST,
+#if !defined(USE_OGN_RF_DRIVER)
     .dio = {LMIC_UNUSED_PIN, LMIC_UNUSED_PIN, LMIC_UNUSED_PIN},
+#else
+    .dio = {SOC_GPIO_PIN_DIO0, LMIC_UNUSED_PIN, LMIC_UNUSED_PIN},
+#endif
+    .busy = SOC_GPIO_PIN_DIO0,
+    .tcxo = LMIC_UNUSED_PIN,
 };
 
 TTYSerial Serial1("/dev/ttyAMA0");
@@ -85,11 +92,24 @@ TTYSerial Serial2("/dev/ttyUSB0");
 // These callbacks are only used in over-the-air activation, so they are
 // left empty here (we cannot leave them out completely unless
 // DISABLE_JOIN is set in config.h, otherwise the linker will complain).
+#if defined(USE_BASICMAC)
+void os_getJoinEui (u1_t* buf) { }
+//void os_getDevEui (u1_t* buf) { }
+void os_getNwkKey (u1_t* buf) { }
+//u1_t os_getRegion (void) { return REGCODE_EU868; }
+#else
 void os_getArtEui (u1_t* buf) { }
 void os_getDevEui (u1_t* buf) { }
 void os_getDevKey (u1_t* buf) { }
+#endif
 
-void onEvent (ev_t ev) { }
+#if defined(USE_BASICMAC)
+extern "C" void onLmicEvent (ev_t ev);
+void onLmicEvent (ev_t ev) {
+#else
+void onEvent (ev_t ev) {
+#endif
+}
 
 eeprom_t eeprom_block;
 settings_t *settings = &eeprom_block.field.settings;
@@ -99,7 +119,7 @@ aircraft the_aircraft;
 char UDPpacketBuffer[UDP_PACKET_BUFSIZE]; // buffer to hold incoming and outgoing packets
 
 hardware_info_t hw_info = {
-  .model    = SOFTRF_MODEL_RASPBERRY,
+  .model    = DEFAULT_SOFTRF_MODEL,
   .revision = 0,
   .soc      = SOC_NONE,
   .rf       = RF_IC_NONE,
@@ -115,31 +135,115 @@ std::string input_line;
 
 TCPServer Traffic_TCP_Server;
 
+//-------------------------------------------------------------------------
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2015 Andrew Duncan
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+//-------------------------------------------------------------------------
+
+#include <fcntl.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <sys/ioctl.h>
+
+static uint32_t SerialNumber = 0;
+
+void RPi_SerialNumber(void)
+{
+    int fd = open("/dev/vcio", 0);
+    if (fd == -1)
+    {
+        perror("open /dev/vcio");
+        exit(EXIT_FAILURE);
+    }
+
+    uint32_t property[32] =
+    {
+        0x00000000,
+        0x00000000,
+        0x00010004,
+        0x00000010,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000
+    };
+
+    property[0] = 10 * sizeof(property[0]);
+
+    if (ioctl(fd, _IOWR(100, 0, char *), property) == -1)
+    {
+        perror("ioctl");
+        exit(EXIT_FAILURE);
+    }
+
+    close(fd);
+
+    SerialNumber = property[5];
+}
+
+//----- end of MIT License ------------------------------------------------
+
 static void RPi_setup()
 {
-  eeprom_block.field.magic = SOFTRF_EEPROM_MAGIC;
-  eeprom_block.field.version = SOFTRF_EEPROM_VERSION;
-  eeprom_block.field.settings.mode = SOFTRF_MODE_NORMAL;
-  eeprom_block.field.settings.rf_protocol = RF_PROTOCOL_OGNTP;
-  eeprom_block.field.settings.band = RF_BAND_EU;
+  eeprom_block.field.magic                  = SOFTRF_EEPROM_MAGIC;
+  eeprom_block.field.version                = SOFTRF_EEPROM_VERSION;
+  eeprom_block.field.settings.mode          = SOFTRF_MODE_NORMAL;
+  eeprom_block.field.settings.rf_protocol   = RF_PROTOCOL_OGNTP;
+  eeprom_block.field.settings.band          = RF_BAND_EU;
   eeprom_block.field.settings.aircraft_type = AIRCRAFT_TYPE_GLIDER;
-  eeprom_block.field.settings.txpower = RF_TX_POWER_FULL;
-  eeprom_block.field.settings.volume = BUZZER_VOLUME_FULL;
-  eeprom_block.field.settings.pointer = DIRECTION_NORTH_UP;
-  eeprom_block.field.settings.bluetooth = BLUETOOTH_OFF;
-  eeprom_block.field.settings.alarm = TRAFFIC_ALARM_DISTANCE;
+  eeprom_block.field.settings.txpower       = RF_TX_POWER_FULL;
+  eeprom_block.field.settings.volume        = BUZZER_VOLUME_FULL;
+  eeprom_block.field.settings.pointer       = DIRECTION_NORTH_UP;
+  eeprom_block.field.settings.bluetooth     = BLUETOOTH_OFF;
+  eeprom_block.field.settings.alarm         = TRAFFIC_ALARM_DISTANCE;
 
-  eeprom_block.field.settings.nmea_g     = true;
-  eeprom_block.field.settings.nmea_p     = false;
-  eeprom_block.field.settings.nmea_l     = true;
-  eeprom_block.field.settings.nmea_s     = true;
-  eeprom_block.field.settings.nmea_out   = NMEA_UART;
-  eeprom_block.field.settings.gdl90      = GDL90_OFF;
-  eeprom_block.field.settings.d1090      = D1090_OFF;
-  eeprom_block.field.settings.json       = JSON_OFF;
-  eeprom_block.field.settings.stealth    = false;
-  eeprom_block.field.settings.no_track   = false;
-  eeprom_block.field.settings.power_save = POWER_SAVE_NONE;
+  eeprom_block.field.settings.nmea_g        = true;
+  eeprom_block.field.settings.nmea_p        = false;
+  eeprom_block.field.settings.nmea_l        = true;
+  eeprom_block.field.settings.nmea_s        = true;
+  eeprom_block.field.settings.nmea_out      = NMEA_UART;
+  eeprom_block.field.settings.gdl90         = GDL90_OFF;
+  eeprom_block.field.settings.d1090         = D1090_OFF;
+  eeprom_block.field.settings.json          = JSON_OFF;
+  eeprom_block.field.settings.stealth       = false;
+  eeprom_block.field.settings.no_track      = false;
+  eeprom_block.field.settings.power_save    = POWER_SAVE_NONE;
+  eeprom_block.field.settings.freq_corr     = 0;
+
+  RPi_SerialNumber();
+}
+
+static void RPi_loop()
+{
+
 }
 
 static void RPi_fini()
@@ -147,14 +251,26 @@ static void RPi_fini()
 
 }
 
+static void RPi_reset()
+{
+
+}
+
 static uint32_t RPi_getChipId()
 {
-  return gethostid();
+  uint32_t id = SerialNumber ? SerialNumber : gethostid();
+
+  /* remap address to avoid overlapping with congested FLARM range */
+  if (((id & 0x00FFFFFF) >= 0xDD0000) && ((id & 0x00FFFFFF) <= 0xDFFFFF)) {
+    id += 0x100000;
+  }
+
+  return id;
 }
 
 static long RPi_random(long howsmall, long howBig)
 {
-  return random(howsmall, howBig);
+  return howsmall + random() % (howBig - howsmall);
 }
 
 static void RPi_WiFi_transmit_UDP(int port, byte *buf, size_t size)
@@ -206,9 +322,11 @@ static unsigned long RPi_get_PPS_TimeMarker() {
 static void RPi_UATSerial_begin(unsigned long baud)
 {
   UATSerial.begin(baud);
+  UATSerial.dtr(false);
+  UATSerial.rts(false);
 }
 
-static void RPi_CC13XX_restart()
+static void RPi_UATModule_restart()
 {
   UATSerial.dtr(false);
 
@@ -239,12 +357,30 @@ static void RPi_WDT_fini()
   /* TBD */
 }
 
+static void RPi_Button_setup()
+{
+  /* TODO */
+}
+
+static void RPi_Button_loop()
+{
+  /* TODO */
+}
+
+static void RPi_Button_fini()
+{
+  /* TODO */
+}
+
 const SoC_ops_t RPi_ops = {
   SOC_RPi,
   "RPi",
   RPi_setup,
+  RPi_loop,
   RPi_fini,
+  RPi_reset,
   RPi_getChipId,
+  NULL,
   NULL,
   NULL,
   NULL,
@@ -270,9 +406,12 @@ const SoC_ops_t RPi_ops = {
   RPi_get_PPS_TimeMarker,
   NULL,
   RPi_UATSerial_begin,
-  RPi_CC13XX_restart,
+  RPi_UATModule_restart,
   RPi_WDT_setup,
-  RPi_WDT_fini
+  RPi_WDT_fini,
+  RPi_Button_setup,
+  RPi_Button_loop,
+  RPi_Button_fini
 };
 
 static bool inputAvailable()
@@ -457,11 +596,14 @@ void normal_loop()
       Traffic_loop();
     }
 
-    if (isTimeToExport() && isValidFix()) {
+    if (isTimeToExport()) {
       NMEA_Export();
-      GDL90_Export();
-      D1090_Export();
-      JSON_Export();
+
+      if (isValidFix()) {
+        GDL90_Export();
+        D1090_Export();
+        JSON_Export();
+      }
       ExportTimeMarker = millis();
     }
 
@@ -488,30 +630,17 @@ void relay_loop()
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       size_t size = RF_Payload_Size(settings->rf_protocol);
       size = size > sizeof(Container[i].raw) ? sizeof(Container[i].raw) : size;
-      String str = Bin2Hex(Container[i].raw, size);
-      size_t str_len = str.length();
 
-      if (str_len > 0) {
+      if (memcmp (Container[i].raw, EmptyFO.raw, size) != 0) {
         // Raw data
-        char hexdata[2 * MAX_PKT_SIZE + 1];
-
-        str.toCharArray(hexdata, sizeof(hexdata));
-
-        if (str_len > 2 * MAX_PKT_SIZE) {
-          str_len = 2 * MAX_PKT_SIZE;
-        }
-
-        for(int j = 0; j < str_len ; j+=2)
-        {
-          TxBuffer[j>>1] = getVal(hexdata[j+1]) + (getVal(hexdata[j]) << 4);
-        }
-
-        size_t tx_size = str_len / 2;
+        size_t tx_size = sizeof(TxBuffer) > size ? size : sizeof(TxBuffer);
+        memcpy(TxBuffer, Container[i].raw, tx_size);
 
         if (tx_size > 0) {
           /* Follow duty cycle rule */
           if (RF_Transmit(tx_size, true /* false */)) {
 #if 0
+            String str = Bin2Hex(TxBuffer, tx_size);
             printf("%s\n", str.c_str());
 #endif
             Container[i] = EmptyFO;
@@ -667,9 +796,17 @@ int main()
       exit(EXIT_FAILURE);
   }
 
-  Serial.begin(38400);
+  Serial.begin(SERIAL_OUT_BR);
 
   hw_info.soc = SoC_setup(); // Has to be very first procedure in the execution order
+
+  Serial.println();
+  Serial.print(F(SOFTRF_IDENT));
+  Serial.print(SoC->name);
+  Serial.print(F(" FW.REV: " SOFTRF_FIRMWARE_VERSION " DEV.ID: "));
+  Serial.println(String(SoC->getChipId(), HEX));
+  Serial.println(F("Copyright (C) 2015-2020 Linar Yusupov. All rights reserved."));
+  Serial.flush();
 
   hw_info.rf = RF_setup();
 
@@ -721,10 +858,37 @@ int main()
       normal_loop();
       break;
     }
+
+    /* take care of millis() rollover on a long term run */
+    if (millis() > (47 * 24 * 3600 * 1000UL)) {
+      time_t current_time = time(NULL);
+      struct tm timebuf;
+
+      if (current_time == ((time_t)-1) ||
+          localtime_r(&current_time, &timebuf) == NULL) {
+        Traffic_TCP_Server.detach();
+        fprintf(stderr, "Failure to obtain the current time.\n");
+        exit(EXIT_FAILURE);
+      }
+
+      /* shut SoftRF down at night time only */
+      if (timebuf.tm_hour >= 2 && timebuf.tm_hour <= 5) {
+        Traffic_TCP_Server.detach();
+        fprintf( stderr, "Program termination: millis() rollover prevention.\n" );
+        exit(EXIT_SUCCESS);
+      }
+    }
   }
 
   Traffic_TCP_Server.detach();
   return 0;
+}
+
+void shutdown(const char *msg)
+{
+    Traffic_TCP_Server.detach();
+    fprintf( stderr, "Program termination: %s.\n", msg );
+    exit(EXIT_SUCCESS);
 }
 
 #endif /* RASPBERRY_PI */

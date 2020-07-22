@@ -1,6 +1,6 @@
 /*
  * WiFiHelper.h
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,11 @@
 #ifndef WIFIHELPER_H
 #define WIFIHELPER_H
 
-#if defined(ARDUINO) && !defined(ENERGIA_ARCH_CC13XX)
+#include "SoCHelper.h"
+
+#if defined(ARDUINO) && !defined(EXCLUDE_WIFI)
 #include <WiFiUdp.h>
 #endif
-
-#include "SoftRF.h"
 
 #define HOSTNAME            "SoftRF-"
 #define UDP_PACKET_BUFSIZE  256
@@ -42,7 +42,7 @@ void Raw_Transmit_UDP(void);
 void WiFi_fini(void);
 
 extern String host_name;
-#if defined(ARDUINO) && !defined(ENERGIA_ARCH_CC13XX)
+#if defined(ARDUINO) && !defined(EXCLUDE_WIFI)
 extern WiFiUDP Uni_Udp;
 #endif
 

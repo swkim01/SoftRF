@@ -1,6 +1,6 @@
 /*
  * Platform_ESP8266.cpp
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,12 +38,19 @@
 // RFM95W pin mapping
 lmic_pinmap lmic_pins = {
     .nss = SOC_GPIO_PIN_SS,
-    .rxtx = { LMIC_UNUSED_PIN, LMIC_UNUSED_PIN },
+    .txe = LMIC_UNUSED_PIN,
+    .rxe = LMIC_UNUSED_PIN,
     .rst = SOC_GPIO_PIN_RST,
     .dio = { LMIC_UNUSED_PIN, LMIC_UNUSED_PIN, LMIC_UNUSED_PIN},
+    .busy = SOC_GPIO_PIN_TXE,
+    .tcxo = LMIC_UNUSED_PIN,
 };
 
-Exp_SoftwareSerial swSer(SOC_GPIO_PIN_SWSER_RX, SOC_GPIO_PIN_SWSER_TX , false, 256);
+#if defined(USE_EXP_SW_SERIAL)
+Exp_SoftwareSerial swSer(SOC_GPIO_PIN_SWSER_RX, SOC_GPIO_PIN_SWSER_TX, false, 256);
+#else
+SoftwareSerial swSer;
+#endif
 
 ESP8266WebServer server ( 80 );
 
@@ -69,15 +76,32 @@ static void ESP8266_setup()
 
 }
 
+static void ESP8266_loop()
+{
+
+}
+
 static void ESP8266_fini()
 {
 
 }
 
+static void ESP8266_reset()
+{
+  ESP.restart();
+}
+
 static uint32_t ESP8266_getChipId()
 {
 #if !defined(SOFTRF_ADDRESS)
-  return ESP.getChipId();
+  uint32_t id = ESP.getChipId();
+
+  /* remap address to avoid overlapping with congested FLARM range */
+  if (((id & 0x00FFFFFF) >= 0xDD0000) && ((id & 0x00FFFFFF) <= 0xDFFFFF)) {
+    id += 0x100000;
+  }
+
+  return id;
 #else
   return (SOFTRF_ADDRESS & 0xFFFFFFFFU );
 #endif
@@ -96,6 +120,11 @@ static String ESP8266_getResetInfo()
 static String ESP8266_getResetReason()
 {
   return ESP.getResetReason();
+}
+
+static uint32_t ESP8266_getFreeHeap()
+{
+  return ESP.getFreeHeap();
 }
 
 static long ESP8266_random(long howsmall, long howBig)
@@ -249,7 +278,11 @@ static void ESP8266_SPI_begin()
 
 static void ESP8266_swSer_begin(unsigned long baud)
 {
+#if defined(USE_EXP_SW_SERIAL)
   swSer.begin(baud);
+#else
+  swSer.begin(baud, SWSERIAL_8N1, SOC_GPIO_PIN_SWSER_RX, SOC_GPIO_PIN_SWSER_TX, false, 256);
+#endif
 }
 
 static void ESP8266_swSer_enableRx(boolean arg)
@@ -282,20 +315,26 @@ static float ESP8266_Battery_voltage()
   return analogRead (SOC_GPIO_PIN_BATTERY) / SOC_A0_VOLTAGE_DIVIDER ;
 }
 
-void ESP8266_GNSS_PPS_Interrupt_handler() {
+void ESP8266_GNSS_PPS_Interrupt_handler()
+{
   PPS_TimeMarker = millis();
 }
 
-static unsigned long ESP8266_get_PPS_TimeMarker() {
+static unsigned long ESP8266_get_PPS_TimeMarker()
+{
   return PPS_TimeMarker;
 }
 
-static bool ESP8266_Baro_setup() {
-  if (hw_info.rf != RF_IC_SX1276 || RF_SX1276_RST_is_connected)
+static bool ESP8266_Baro_setup()
+{
+
+  if ((hw_info.rf != RF_IC_SX1276 && hw_info.rf != RF_IC_SX1262) ||
+      RF_SX12XX_RST_is_connected) {
     return false;
+  }
 
 #if DEBUG
-    Serial.println(F("INFO: RESET pin of SX1276 radio is not connected to MCU."));
+    Serial.println(F("INFO: RESET pin of SX12xx radio is not connected to MCU."));
 #endif
 
   Wire.pins(SOC_GPIO_PIN_SDA, SOC_GPIO_PIN_SCL);
@@ -308,7 +347,7 @@ static void ESP8266_UATSerial_begin(unsigned long baud)
   UATSerial.begin(baud);
 }
 
-static void ESP8266_CC13XX_restart()
+static void ESP8266_UATModule_restart()
 {
   /* TBD */
 }
@@ -323,15 +362,33 @@ static void ESP8266_WDT_fini()
   /* TBD */
 }
 
+static void ESP8266_Button_setup()
+{
+  /* TODO */
+}
+
+static void ESP8266_Button_loop()
+{
+  /* TODO */
+}
+
+static void ESP8266_Button_fini()
+{
+  /* TODO */
+}
+
 const SoC_ops_t ESP8266_ops = {
   SOC_ESP8266,
   "ESP8266",
   ESP8266_setup,
+  ESP8266_loop,
   ESP8266_fini,
+  ESP8266_reset,
   ESP8266_getChipId,
   ESP8266_getResetInfoPtr,
   ESP8266_getResetInfo,
   ESP8266_getResetReason,
+  ESP8266_getFreeHeap,
   ESP8266_random,
   ESP8266_Sound_test,
   ESP8266_maxSketchSpace,
@@ -354,9 +411,12 @@ const SoC_ops_t ESP8266_ops = {
   ESP8266_get_PPS_TimeMarker,
   ESP8266_Baro_setup,
   ESP8266_UATSerial_begin,
-  ESP8266_CC13XX_restart,
+  ESP8266_UATModule_restart,
   ESP8266_WDT_setup,
-  ESP8266_WDT_fini
+  ESP8266_WDT_fini,
+  ESP8266_Button_setup,
+  ESP8266_Button_loop,
+  ESP8266_Button_fini
 };
 
 #endif /* ESP8266 */

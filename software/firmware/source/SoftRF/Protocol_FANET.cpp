@@ -7,7 +7,7 @@
  *    Development -  https://github.com/3s1d/fanet-stm32
  *    Deprecated  -  https://github.com/3s1d/fanet
  *
- * Copyright (C) 2017-2019 Linar Yusupov
+ * Copyright (C) 2017-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,8 +51,8 @@ const rf_proto_desc_t fanet_proto_desc = {
   .payload_offset   = 0,
   .crc_type         = RF_CHECKSUM_TYPE_NONE, /* LoRa packet has built-in CRC */
   .crc_size         = 0 /* INVALID FOR LORA */,
-
   .bitrate          = DR_SF7B /* CR_5 BW_250 SF_7 */,
+
   .deviation        = 0 /* INVALID FOR LORA */,
   .whitening        = RF_WHITENING_NONE,
   .bandwidth        = 0, /* INVALID FOR LORA */
@@ -205,14 +205,21 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
   fanet_packet_t *pkt = (fanet_packet_t *) fanet_pkt;
   unsigned int altitude;
-  uint8_t speed_byte, climb_byte;
-  int speed_int, climb_int;
+  uint8_t speed_byte, climb_byte, offset_byte;
+  int speed_int, climb_int, offset_int;
+  bool rval = false;
 
   if (pkt->ext_header == 0 && pkt->type == 1 ) {  /* Tracking  */
 
-    fop->protocol = RF_PROTOCOL_FANET;
+    /* ignore this device own (relayed) packets */
+    if (pkt->vendor  == SOFRF_FANET_VENDOR_ID &&
+        pkt->address == (this_aircraft->addr & 0xFFFF) /* && */
+        /* pkt->forward == 1 */) {
+      return rval;
+    }
 
-    fop->addr = (pkt->vendor << 16) | pkt->address;
+    fop->protocol = RF_PROTOCOL_FANET;
+    fop->addr     = (pkt->vendor << 16) | pkt->address;
 
 #if defined(FANET_DEPRECATED)
     fop->latitude  = payload_compressed2coord(pkt->latitude, this_aircraft->latitude);
@@ -247,6 +254,17 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     }
     fop->vs = ((float)climb_int) * (_GPS_FEET_PER_METER * 6.0);
 
+#if defined(FANET_NEXT)
+    offset_byte = pkt->qne_offset;
+    offset_int = (int) (offset_byte | (offset_byte & (1<<6) ? 0xFFFFFF80U : 0));
+
+    if (pkt->qne_scale) {
+      offset_int *= 4;
+    }
+
+    fop->pressure_altitude = fop->altitude + (float) offset_int;
+#endif
+
     fop->addr_type = ADDR_TYPE_FANET;
     fop->timestamp = this_aircraft->timestamp;
 
@@ -274,10 +292,10 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     Serial.println();
     Serial.flush();
 #endif
-    return true;
-  } else {
-    return false;
+    rval = true;
   }
+
+  return rval;
 }
 
 size_t fanet_encode(void *fanet_pkt, ufo_t *this_aircraft) {
@@ -291,6 +309,8 @@ size_t fanet_encode(void *fanet_pkt, ufo_t *this_aircraft) {
   float climb = this_aircraft->vs / (_GPS_FEET_PER_METER * 60.0);
   float heading = this_aircraft->course;
   float turnrate = 0;
+  int16_t alt_diff = this_aircraft->pressure_altitude == 0 ? 0 :
+          (int16_t) (this_aircraft->pressure_altitude - this_aircraft->altitude);
 
   fanet_packet_t *pkt = (fanet_packet_t *) fanet_pkt;
 
@@ -312,16 +332,9 @@ size_t fanet_encode(void *fanet_pkt, ufo_t *this_aircraft) {
   pkt->aircraft_type  = AT_TO_FANET(aircraft_type);
 
   int altitude        = constrain(alt, 0, 8190);
-  if(altitude > 2047) {
-    int alt_s = ((altitude + 2) / 4);
-    pkt->altitude_scale = 1;
-    pkt->altitude_msb   = (alt_s & 0x700) >> 16;
-    pkt->altitude_lsb   = (alt_s & 0x0FF);
-  } else {
-    pkt->altitude_scale = 0;
-    pkt->altitude_msb   = (altitude & 0x700) >> 16;
-    pkt->altitude_lsb   = (altitude & 0x0FF);
-  }
+  pkt->altitude_scale = altitude > 2047 ? (altitude = (altitude + 2) / 4, 1) : 0;
+  pkt->altitude_msb   = (altitude & 0x700) >> 8;
+  pkt->altitude_lsb   = (altitude & 0x0FF);
 
   int speed2          = constrain((int)roundf(speed * 2.0f), 0, 635);
   if(speed2 > 127) {
@@ -351,6 +364,17 @@ size_t fanet_encode(void *fanet_pkt, ufo_t *this_aircraft) {
     pkt->turn_scale   = 0;
     pkt->turn_rate    = turnr4 & 0x7F;
   }
+
+#if defined(FANET_NEXT)
+  int16_t offset      = constrain(alt_diff, -254, 254);
+  if(abs(offset) > 63) {
+    pkt->qne_scale    = 1;
+    pkt->qne_offset   = ((offset + (offset >= 0 ? 2 : -2)) / 4);
+  } else {
+    pkt->qne_scale    = 0;
+    pkt->qne_offset   = offset & 0x7F;
+  }
+#endif
 
   return sizeof(fanet_packet_t);
 }

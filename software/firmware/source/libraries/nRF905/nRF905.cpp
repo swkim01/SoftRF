@@ -7,7 +7,10 @@
  */
 
 #include <string.h>
-#if !defined(ESP8266) && !defined(ESP32) && !defined(RASPBERRY_PI) && !defined(ENERGIA_ARCH_CC13XX)
+#if !defined(ESP8266) && !defined(ESP32) && !defined(RASPBERRY_PI) && \
+    !defined(ENERGIA_ARCH_CC13XX) && !defined(ENERGIA_ARCH_CC13X2) && \
+    !defined(ARDUINO_ARCH_STM32)  && !defined(__ASR6501__)
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
@@ -18,9 +21,9 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <SPI.h>
-#if defined(ENERGIA_ARCH_CC13XX)
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2)
 #define _BV(bit) (1 << (bit))
-#endif /* ENERGIA_ARCH_CC13XX */
+#endif /* ENERGIA_ARCH_CC13XX || ENERGIA_ARCH_CC13X2 */
 #else
 #if !defined(RASPBERRY_PI)
 #include "nRF905_spi.h"
@@ -162,7 +165,7 @@ void nRF905_init()
 #endif
 
 #if !NRF905_DR_SW
-	pinMode(DR, INPUT);
+	pinMode(DREADY, INPUT);
 #endif
 
 	digitalWrite(CSN, HIGH);
@@ -170,7 +173,7 @@ void nRF905_init()
 
 	SPI.begin();
 
-#if !defined(RASPBERRY_PI)
+#if !defined(RASPBERRY_PI) && !defined(__ASR6501__)
 	SPI.setClockDivider(SPI_CLOCK_DIV2);
 #endif /* RASPBERRY_PI */
 #else
@@ -428,7 +431,7 @@ static bool dataReady()
 #if NRF905_DR_SW
 	return (readStatus() & _BV(NRF905_STATUS_DR));
 #elif defined(ARDUINO)
-	return digitalRead(DR);
+	return digitalRead(DREADY);
 #else
 	return (DR_PORT & _BV(DR_BIT));
 #endif

@@ -1,6 +1,6 @@
 /*
  * EEPROMHelper.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@ void EEPROM_setup()
     Serial.print(F("ERROR: Failed to initialize "));
     Serial.print(sizeof(eeprom_t));
     Serial.println(F(" bytes of EEPROM!"));
+    Serial.flush();
     delay(1000000);
   }
 
@@ -44,7 +45,7 @@ void EEPROM_setup()
   }
 
   if (eeprom_block.field.magic != SKYVIEW_EEPROM_MAGIC) {
-    Serial.println(F("Warning! EEPROM magic mismatch! Loading defaults..."));
+    Serial.println(F("WARNING! User defined settings are not initialized yet. Loading defaults..."));
 
     EEPROM_defaults();
   } else {
@@ -52,7 +53,7 @@ void EEPROM_setup()
     Serial.println(eeprom_block.field.version);
 
     if (eeprom_block.field.version != SKYVIEW_EEPROM_VERSION) {
-      Serial.println(F("Warning! EEPROM version mismatch! Loading defaults..."));
+      Serial.println(F("WARNING! Version mismatch of user defined settings. Loading defaults..."));
 
       EEPROM_defaults();
     }
@@ -75,21 +76,20 @@ void EEPROM_defaults()
   eeprom_block.field.settings.protocol        = PROTOCOL_NMEA;
   eeprom_block.field.settings.orientation     = DIRECTION_NORTH_UP;
 
-  strcpy(eeprom_block.field.settings.ssid,      DEFAULT_AP_SSID);
-  strcpy(eeprom_block.field.settings.psk,       DEFAULT_AP_PSK);
-
-  eeprom_block.field.settings.bluetooth       = BLUETOOTH_OFF;
-
-  strcpy(eeprom_block.field.settings.bt_name,   DEFAULT_BT_NAME);
-  strcpy(eeprom_block.field.settings.bt_key,    DEFAULT_BT_KEY);
+  strcpy(eeprom_block.field.settings.server,    DEFAULT_AP_SSID);
+  strcpy(eeprom_block.field.settings.key,       DEFAULT_AP_PSK);
 
   eeprom_block.field.settings.units           = UNITS_METRIC;
   eeprom_block.field.settings.vmode           = VIEW_MODE_RADAR;
   eeprom_block.field.settings.zoom            = ZOOM_MEDIUM;
-  eeprom_block.field.settings.adb             = DB_AUTO;
+  eeprom_block.field.settings.adb             = DB_NONE;
   eeprom_block.field.settings.idpref          = ID_REG;
   eeprom_block.field.settings.voice           = VOICE_1;
   eeprom_block.field.settings.aghost          = ANTI_GHOSTING_OFF;
+
+  eeprom_block.field.settings.filter          = TRAFFIC_FILTER_OFF;
+  eeprom_block.field.settings.power_save      = POWER_SAVE_NONE;
+  eeprom_block.field.settings.team            = 0;
 }
 
 void EEPROM_store()

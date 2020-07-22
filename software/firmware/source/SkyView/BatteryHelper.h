@@ -1,6 +1,6 @@
 /*
  * BatteryHelper.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,11 @@
 #define BATTERY_THRESHOLD_NIMHX2  2.3
 #define BATTERY_THRESHOLD_LIPO    3.5
 #define BATTERY_THRESHOLD_LIFE    3.0
+#define BATTERY_THRESHOLD_NIZNX2  3.0
 
+#define BATTERY_CUTOFF_NIMHX2     2.1
 #define BATTERY_CUTOFF_LIPO       3.2
+#define BATTERY_CUTOFF_NIZNX2     2.9
 
 void  Battery_setup(void);
 void  Battery_loop(void);

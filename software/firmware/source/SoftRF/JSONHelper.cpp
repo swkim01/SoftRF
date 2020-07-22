@@ -1,6 +1,6 @@
 /*
  * JSONHelper.cpp
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -405,6 +405,8 @@ void parseSettings(JsonObject& root)
       eeprom_block.field.settings.aircraft_type = AIRCRAFT_TYPE_PARAGLIDER;
     } else if (!strcmp(aircraft_type_s,"BALLOON")) {
       eeprom_block.field.settings.aircraft_type = AIRCRAFT_TYPE_BALLOON;
+    } else if (!strcmp(aircraft_type_s,"STATIC")) {
+      eeprom_block.field.settings.aircraft_type = AIRCRAFT_TYPE_STATIC;
     }
   }
 
@@ -528,6 +530,17 @@ void parseSettings(JsonObject& root)
   JsonVariant no_track = root["no_track"];
   if (no_track.success()) {
     eeprom_block.field.settings.no_track = no_track.as<bool>();
+  }
+
+  JsonVariant fcor = root["fcor"];
+  if (fcor.success()) {
+    int fc = fcor.as<signed int>();
+    if (fc > 30) {
+      fc = 30;
+    } else if (fc < -30) {
+      fc = -30;
+    };
+    eeprom_block.field.settings.freq_corr = fc;
   }
 }
 

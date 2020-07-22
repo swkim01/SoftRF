@@ -1,6 +1,6 @@
 /*
  * BatteryHelper.h
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,14 +24,17 @@
 #define BATTERY_THRESHOLD_NIMHX2  2.3
 #define BATTERY_THRESHOLD_LIPO    3.5
 #define BATTERY_THRESHOLD_LIFE    3.0
+#define BATTERY_THRESHOLD_NIZNX2  3.0
 
 #define BATTERY_CUTOFF_NIMHX2     2.1
 #define BATTERY_CUTOFF_LIPO       3.2
+#define BATTERY_CUTOFF_NIZNX2     2.9
 
 enum
 {
-	POWER_SAVE_NONE,
-	POWER_SAVE_WIFI
+	POWER_SAVE_NONE = 0,
+	POWER_SAVE_WIFI = 1,
+	POWER_SAVE_GNSS = 2
 };
 
 void  Battery_setup(void);
@@ -39,5 +42,7 @@ void  Battery_loop(void);
 float Battery_voltage(void);
 float Battery_threshold(void);
 float Battery_cutoff(void);
+
+extern unsigned long Battery_TimeMarker;
 
 #endif /* BATTERYHELPER_H */

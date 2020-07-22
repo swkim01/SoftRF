@@ -21,7 +21,9 @@
 
 // Use pin interrupt for data ready
 // NOTE: If you have other devices connected that use the SPI bus then you will need to call nRF905_interrupt_off() before using SPI comms and then RF905_interrupt_on() once you've finished.
-#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || defined(ENERGIA_ARCH_CC13XX)
+#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || \
+    defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2) || \
+    defined(ARDUINO_ARCH_STM32)  || defined(__ASR6501__)
 #define NRF905_INTERRUPTS	0
 #else
 #define NRF905_INTERRUPTS	1
@@ -42,7 +44,9 @@
 
 // Use software to get address match state instead of reading pin for high/low state
 // Not used in this library yet
-#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || defined(ENERGIA_ARCH_CC13XX)
+#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || \
+    defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2) || \
+    defined(ARDUINO_ARCH_STM32)  || defined(__ASR6501__)
 #define NRF905_AM_SW		1
 #else
 #define NRF905_AM_SW		0
@@ -53,7 +57,9 @@
 #define NRF905_DR_SW		1
 
 // Don't transmit if airway is busy (other transmissions are going on)
-#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || defined(ENERGIA_ARCH_CC13XX)
+#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || \
+    defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2) || \
+    defined(ARDUINO_ARCH_STM32)  || defined(__ASR6501__)
 #define NRF905_COLLISION_AVOID	0
 #else
 #define NRF905_COLLISION_AVOID	1
@@ -69,45 +75,80 @@
 
 #if defined(ARDUINO_ESP8266_NODEMCU)
 // NodeMCU 1.0 GPIO pins
-#define TRX_EN    D4  // GPIO 2   // Enable/standby pin
-#define PWR_MODE  D2  // GPIO 4   // Power mode pin
-#define TX_EN     D0  // GPIO 16  // TX / RX mode pin
-#define CSN       D8  // GPIO 15  // SPI slave select pin
+#define TRX_EN    D4   // GPIO 2   // Enable/standby pin
+#define PWR_MODE  D2   // GPIO 4   // Power mode pin
+#define TX_EN     D0   // GPIO 16  // TX / RX mode pin
+#define CSN       D8   // GPIO 15  // SPI slave select pin
 #else
 /* Generic ESP8266 */
-#define TRX_EN    2   // Enable/standby pin
-#define PWR_MODE  4   // Power mode pin
-#define TX_EN     16  // TX / RX mode pin
-#define CSN       15  // SPI slave select pin
+#define TRX_EN    2    // Enable/standby pin
+#define PWR_MODE  4    // Power mode pin
+#define TX_EN     16   // TX / RX mode pin
+#define CSN       15   // SPI slave select pin
 #endif /* ARDUINO_ESP8266_NODEMCU */
 
-#define CD			0	// Carrier detect pin (for collision avoidance, if enabled)
-#define DR			5
+#define CD        0	   // Carrier detect pin (for collision avoidance, if enabled)
+#define DREADY    5
 
 #elif defined(ESP32)
 
 // DOIT ESP32
-#define TRX_EN    2  // Enable/standby pin
-#define PWR_MODE  14  // Power mode pin
-#define TX_EN     26  // TX / RX mode pin
-#define CSN       18  // SPI slave select pin
+#define TRX_EN    2    // Enable/standby pin
+#define PWR_MODE  14   // Power mode pin
+#define TX_EN     26   // TX / RX mode pin
+#define CSN       18   // SPI slave select pin
 
-#define CD			0	// Carrier detect pin (for collision avoidance, if enabled)
-#define DR			5
+#define CD        0	   // Carrier detect pin (for collision avoidance, if enabled)
+#define DREADY    5
+
+#elif defined(ARDUINO_ARCH_STM32)
+
+#if defined(ARDUINO_NUCLEO_L073RZ)
+/* L073RZ */
+#define TRX_EN    PB8  // Enable/standby pin
+#define PWR_MODE  PB10 // Power mode pin
+#define TX_EN     PB11 // TX / RX mode pin
+#define CSN       PB12 // SPI slave select pin
+
+#elif defined(ARDUINO_BLUEPILL_F103CB)
+// Blue Pill
+#define TRX_EN    PB3  // Enable/standby pin
+#define PWR_MODE  PB5  // Power mode pin
+#define TX_EN     PB4  // TX / RX mode pin
+#define CSN       PA4  // SPI slave select pin
+
+#else
+#error "This hardware platform is not supported!"
+#endif /* ARDUINO_NUCLEO_L073RZ & ARDUINO_BLUEPILL_F103CB */
+
+#define CD        0	   // Carrier detect pin (for collision avoidance, if enabled)
+#define DREADY    5
+
+#elif defined(__ASR6501__)
+
+#include <board-config.h>
+
+#define TRX_EN    SCL         // Enable/standby pin
+#define PWR_MODE  RADIO_RESET // Power mode pin
+#define TX_EN     RADIO_BUSY  // TX / RX mode pin
+#define CSN       RADIO_NSS   // SPI slave select pin
+
+#define CD        0	   // Carrier detect pin (for collision avoidance, if enabled)
+#define DREADY    5
 
 #else
 
 // Arduino pins
-#define TRX_EN		7	// Enable/standby pin
-#define PWR_MODE	8	// Power mode pin
-#define TX_EN		9	// TX / RX mode pin
-#define CD			2	// Carrier detect pin (for collision avoidance, if enabled)
-#define CSN			10	// SPI slave select pin
+#define TRX_EN    7	   // Enable/standby pin
+#define PWR_MODE  8	   // Power mode pin
+#define TX_EN     9	   // TX / RX mode pin
+#define CD        2	   // Carrier detect pin (for collision avoidance, if enabled)
+#define CSN       10	 // SPI slave select pin
 
 // Data ready pin
 // If using interrupts (NRF905_INTERRUPTS 1) then this must be
 // an external interrupt pin that matches the interrupt register settings below.
-#define DR			3
+#define DREADY    3
 #endif
 
 // Address match pin (not used by library)
@@ -128,12 +169,12 @@
 #define CFG_PWR_MODE_BIT	0
 
 // TX / RX mode pin
-#define CFG_TX_EN_PORT		B
-#define CFG_TX_EN_BIT		1
+#define CFG_TX_EN_PORT    B
+#define CFG_TX_EN_BIT     1
 
 // Carrier detect pin (for collision avoidance, if enabled)
-#define CFG_CD_PORT			D
-#define CFG_CD_BIT			2
+#define CFG_CD_PORT       D
+#define CFG_CD_BIT        2
 
 // Address match pin (not used by library)
 // blah
@@ -143,12 +184,12 @@
 // Data ready pin
 // If using interrupts (NRF905_INTERRUPTS 1) then this must be
 // an external interrupt pin that matches the interrupt register settings below.
-#define CFG_DR_PORT			D
-#define CFG_DR_BIT			3
+#define CFG_DR_PORT       D
+#define CFG_DR_BIT        3
 
 // SPI slave select pin
-#define CFG_CSN_PORT		B
-#define CFG_CSN_BIT			2
+#define CFG_CSN_PORT      B
+#define CFG_CSN_BIT       2
 
 #else /* RASPBERRY_PI */
 
@@ -160,7 +201,7 @@
 #define CSN       (RPI_V2_GPIO_P1_22)  // SPI slave select pin
 
 #define CD			  (24)	// Carrier detect pin (for collision avoidance, if enabled)
-#define DR			  (25)
+#define DREADY		(25)
 
 // Address match pin (not used by library)
 //#define AM        (7)
@@ -210,7 +251,8 @@
 ///////////////////
 
 // Frequency
-#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI)
+#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || \
+    defined(ARDUINO_ARCH_STM32) || defined(__ASR6501__)
 #define NRF905_FREQ			868400000UL
 #else
 #define NRF905_FREQ			433200000UL
@@ -220,7 +262,8 @@
 // NRF905_BAND_433
 // NRF905_BAND_868
 // NRF905_BAND_915
-#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI)
+#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || \
+    defined(ARDUINO_ARCH_STM32) || defined(__ASR6501__)
 #define NRF905_BAND			NRF905_BAND_868
 #else
 #define NRF905_BAND			NRF905_BAND_433
@@ -264,7 +307,8 @@
 // Number of bytes for address
 // NRF905_ADDR_SIZE_1
 // NRF905_ADDR_SIZE_4
-#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI)
+#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || \
+    defined(ARDUINO_ARCH_STM32) || defined(__ASR6501__)
 #define NRF905_ADDR_SIZE	NRF905_ADDR_SIZE_3
 //#define NRF905_ADDR_SIZE	NRF905_ADDR_SIZE_2
 #else
@@ -272,7 +316,8 @@
 #endif
 
 // Payload size (1 - 32)
-#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI)
+#if defined(ESP8266) || defined(ESP32) || defined(RASPBERRY_PI) || \
+    defined(ARDUINO_ARCH_STM32) || defined(__ASR6501__)
 #define NRF905_PAYLOAD_SIZE	24
 #else
 #define NRF905_PAYLOAD_SIZE	32 //NRF905_MAX_PAYLOAD

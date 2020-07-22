@@ -1,6 +1,6 @@
 /*
  * SoCHelper.cpp
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,12 @@ byte SoC_setup()
   SoC = &ESP32_ops;
 #elif defined(RASPBERRY_PI)
   SoC = &RPi_ops;
-#elif defined(ENERGIA_ARCH_CC13XX)
+#elif defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2)
   SoC = &CC13XX_ops;
+#elif defined(ARDUINO_ARCH_STM32)
+  SoC = &STM32_ops;
+#elif defined(__ASR6501__)
+  SoC = &PSoC4_ops;
 #else
 #error "This hardware platform is not supported!"
 #endif

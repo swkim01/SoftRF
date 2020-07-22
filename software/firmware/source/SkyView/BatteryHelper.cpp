@@ -1,6 +1,6 @@
 /*
  * BatteryHelper.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,8 +52,8 @@ void Battery_setup()
 
 void Battery_loop()
 {
-  if (hw_info.model    == SOFTRF_MODEL_SKYVIEW &&
-      hw_info.revision == HW_REV_T5S_1_9) {
+  if ( hw_info.model    == SOFTRF_MODEL_SKYVIEW &&
+      (hw_info.revision == HW_REV_T5S_1_9 || hw_info.revision == HW_REV_T5S_2_8)) {
     if (isTimeToBattery()) {
       float voltage = Battery_voltage();
 

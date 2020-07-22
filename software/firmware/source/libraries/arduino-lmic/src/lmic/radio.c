@@ -284,6 +284,9 @@ static u1_t randbuf[16];
 // over current config
 #define DEFAULT_CURRENT     0x2b    // default over current setting (100 mA)
 #define HIGHPOWER_CURRENT   0x31    // setting for +20 dBm output (140 mA)
+
+#define OPMODE_FSK_SX1276_LowFrequencyModeOn        (1u << 3)
+#define OPMODE_LORA_SX1276_LowFrequencyModeOn       (1u << 3)
 #elif CFG_sx1272_radio
 #define LNA_RX_GAIN (0x20|0x03)
 #else
@@ -300,7 +303,7 @@ static u1_t randbuf[16];
 //#define FIFO_Push_Inv(x)              writeReg(RegFifo, (u1_t)~(x))
 
 static void opmode (u1_t mode) {
-#if defined(ENERGIA_ARCH_CC13XX) || defined(RASPBERRY_PI)
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2) || defined(RASPBERRY_PI)
     delay(1);
 #endif
     writeReg(RegOpMode, (readReg(RegOpMode) & ~OPMODE_MASK) | mode);
@@ -310,7 +313,9 @@ static void opmode (u1_t mode) {
 static void opmodeLora() {
     u1_t u = OPMODE_LORA;
 #ifdef CFG_sx1276_radio
-    u |= 0x8;   // TBD: sx1276 high freq
+    if (LMIC.freq <= SX127X_FREQ_LF_MAX) {
+        u |= OPMODE_LORA_SX1276_LowFrequencyModeOn;
+    }
 #endif
     writeReg(RegOpMode, u);
 }
@@ -318,7 +323,9 @@ static void opmodeLora() {
 static void opmodeFSK() {
     u1_t u = 0;
 #ifdef CFG_sx1276_radio
-    u |= 0x8;   // TBD: sx1276 high freq
+    if (LMIC.freq <= SX127X_FREQ_LF_MAX) {
+        u |= OPMODE_FSK_SX1276_LowFrequencyModeOn;
+    }
 #endif
     writeReg(RegOpMode, u);
 }
@@ -584,7 +591,7 @@ static void txlora () {
     configPower();
 
     // set sync word
-    writeReg(LORARegSyncWord, LMIC.preamble);
+    writeReg(LORARegSyncWord, LMIC.syncword);
 
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
@@ -676,7 +683,7 @@ static void rxlora (u1_t rxmode) {
     writeReg(LORARegSymbTimeoutLsb, LMIC.rxsyms);
 
     // set sync word
-    writeReg(LORARegSyncWord, LMIC.preamble);
+    writeReg(LORARegSyncWord, LMIC.syncword);
 
     // configure DIO mapping DIO0=RxDone DIO1=RxTout DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_RXDONE|MAP_DIO1_LORA_RXTOUT|MAP_DIO2_LORA_NOP);
@@ -1139,7 +1146,7 @@ void os_radio (u1_t mode) {
         break;
 
       case RADIO_TX:
-#if defined(ENERGIA_ARCH_CC13XX) || defined(RASPBERRY_PI)
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2) || defined(RASPBERRY_PI)
         delay(1);
 #endif
         // transmit frame now

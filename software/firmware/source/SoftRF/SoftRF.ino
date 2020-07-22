@@ -1,6 +1,6 @@
 /*
  * SoftRF(.ino) firmware
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * Author: Linar Yusupov, linar.r.yusupov@gmail.com
  *
@@ -15,12 +15,14 @@
  *   TinyGPS++ and PString Libraries are developed by Mikal Hart
  *   Adafruit NeoPixel Library is developed by Phil Burgess, Michael Miller and others
  *   TrueRandom Library is developed by Peter Knight
- *   IBM LMIC framework is maintained by Matthijs Kooijman
+ *   IBM LMIC and Semtech Basic MAC frameworks for Arduino are maintained by Matthijs Kooijman
  *   ESP8266FtpServer is developed by David Paiva
  *   Lib_crc is developed by Lammert Bies
  *   OGN library is developed by Pawel Jalocha
  *   NMEA library is developed by Timur Sinitsyn, Tobias Simon, Ferry Huberts
  *   ADS-B encoder C++ library is developed by yangbinbin (yangbinbin_ytu@163.com)
+ *   Arduino Core for ESP32 is developed by Hristo Gochkov
+ *   ESP32 BT SPP library is developed by Evandro Copercini
  *   Adafruit BMP085 library is developed by Limor Fried and Ladyada
  *   Adafruit BMP280 library is developed by Kevin Townsend
  *   Adafruit MPL3115A2 library is developed by Limor Fried and Kevin Townsend
@@ -32,9 +34,17 @@
  *   SimpleNetwork library is developed by Dario Longobardi
  *   ArduinoJson library is developed by Benoit Blanchon
  *   Flashrom library is part of the flashrom.org project
+ *   Arduino Core for TI CC13X0 and CC13X2 is developed by Robert Wessels
  *   EasyLink library is developed by Robert Wessels and Tony Cave
  *   Dump978 library is developed by Oliver Jowett
  *   FEC library is developed by Phil Karn
+ *   AXP202X library is developed by Lewis He
+ *   Arduino Core for STM32 is developed by Frederic Pillon
+ *   TFT library is developed by Bodmer
+ *   STM32duino Low Power and RTC libraries are developed by Wi6Labs
+ *   Basic MAC library is developed by Michael Kuyper
+ *   LowPowerLab SPIFlash library is maintained by Felix Rusu
+ *   Arduino core for ASR650x is developed by Aaron Lee (HelTec Automation)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,8 +79,6 @@
 #include "TTNHelper.h"
 #include "TrafficHelper.h"
 
-#include "SoftRF.h"
-
 #if defined(ENABLE_AHRS)
 #include "AHRSHelper.h"
 #endif /* ENABLE_AHRS */
@@ -86,8 +94,9 @@
 #define isTimeToExport() (millis() - ExportTimeMarker > 1000)
 
 ufo_t ThisAircraft;
+
 hardware_info_t hw_info = {
-  .model    = SOFTRF_MODEL_STANDALONE,
+  .model    = DEFAULT_SOFTRF_MODEL,
   .revision = 0,
   .soc      = SOC_NONE,
   .rf       = RF_IC_NONE,
@@ -107,28 +116,46 @@ void setup()
 
   resetInfo = (rst_info *) SoC->getResetInfoPtr();
 
-  Serial.begin(38400);
+  Serial.begin(SERIAL_OUT_BR, SERIAL_OUT_BITS);
+
+#if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
+  /* Let host's USB and console drivers to warm-up */
+  delay(2000);
+#endif
 
 #if LOGGER_IS_ENABLED && !defined(SDGPXLOG)
   Logger_setup();
 #endif /* LOGGER_IS_ENABLED */
 
-  Serial.println(""); Serial.print(F("Reset reason: ")); Serial.println(resetInfo->reason);
+  Serial.println();
+  Serial.print(F(SOFTRF_IDENT));
+  Serial.print(SoC->name);
+  Serial.print(F(" FW.REV: " SOFTRF_FIRMWARE_VERSION " DEV.ID: "));
+  Serial.println(String(SoC->getChipId(), HEX));
+  Serial.println(F("Copyright (C) 2015-2020 Linar Yusupov. All rights reserved."));
+  Serial.flush();
+
+  if (resetInfo) {
+    Serial.println(""); Serial.print(F("Reset reason: ")); Serial.println(resetInfo->reason);
+  }
   Serial.println(SoC->getResetReason());
-  Serial.print(F("Free heap size: ")); Serial.println(ESP.getFreeHeap());
-#if defined(ESP32_DEVEL_CORE)
-  Serial.print(F("PSRAM: ")); Serial.println(psramFound() ? F("found") : F("not found"));
-#endif
+  Serial.print(F("Free heap size: ")); Serial.println(SoC->getFreeHeap());
   Serial.println(SoC->getResetInfo()); Serial.println("");
 
   EEPROM_setup();
+
+  SoC->Button_setup();
 
   ThisAircraft.addr = SoC->getChipId() & 0x00FFFFFF;
 
   hw_info.rf = RF_setup();
 
-  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && RF_SX1276_RST_is_connected)
-      hw_info.revision = 5;
+  if (hw_info.model    == SOFTRF_MODEL_PRIME_MK2 &&
+      hw_info.revision == 2                      &&
+      RF_SX12XX_RST_is_connected)
+  {
+    hw_info.revision = 5;
+  }
 
   delay(100);
 
@@ -138,11 +165,14 @@ void setup()
 #endif /* ENABLE_AHRS */
   hw_info.display = SoC->Display_setup();
 
+#if !defined(EXCLUDE_MAVLINK)
   if (settings->mode == SOFTRF_MODE_UAV) {
     Serial.begin(57600);
     MAVLink_setup();
     ThisAircraft.aircraft_type = AIRCRAFT_TYPE_UAV;  
-  }  else {
+  }  else
+#endif /* EXCLUDE_MAVLINK */
+  {
     hw_info.gnss = GNSS_setup();
     ThisAircraft.aircraft_type = settings->aircraft_type;
   }
@@ -208,21 +238,27 @@ void loop()
 
   switch (settings->mode)
   {
+#if !defined(EXCLUDE_TEST_MODE)
   case SOFTRF_MODE_TXRX_TEST:
-    txrx_test_loop();
+    txrx_test();
     break;
+#endif /* EXCLUDE_TEST_MODE */
+#if !defined(EXCLUDE_MAVLINK)
   case SOFTRF_MODE_UAV:
-    uav_loop();
+    uav();
     break;
+#endif /* EXCLUDE_MAVLINK */
+#if !defined(EXCLUDE_WIFI)
   case SOFTRF_MODE_BRIDGE:
-    bridge_loop();
+    bridge();
     break;
+#endif /* EXCLUDE_WIFI */
   case SOFTRF_MODE_WATCHOUT:
-    watchout_loop();
+    watchout();
     break;
   case SOFTRF_MODE_NORMAL:
   default:
-    normal_loop();
+    normal();
     break;
   }
 
@@ -245,7 +281,11 @@ void loop()
   Logger_loop();
 #endif /* LOGGER_IS_ENABLED */
 
+  SoC->loop();
+
   Battery_loop();
+
+  SoC->Button_loop();
 
   yield();
 }
@@ -270,10 +310,12 @@ void shutdown(const char *msg)
 
   RF_Shutdown();
 
+  SoC->Button_fini();
+
   SoC_fini();
 }
 
-void normal_loop()
+void normal()
 {
   bool success;
 
@@ -283,9 +325,7 @@ void normal_loop()
   AHRS_loop();
 #endif /* ENABLE_AHRS */
 
-  PickGNSSFix();
-
-  GNSSTimeSync();
+  GNSS_loop();
 
   ThisAircraft.timestamp = now();
   if (isValidFix()) {
@@ -297,6 +337,7 @@ void normal_loop()
     ThisAircraft.hdop = (uint16_t) gnss.hdop.value();
     ThisAircraft.geoid_separation = gnss.separation.meters();
 
+#if !defined(EXCLUDE_EGM96)
     /*
      * When geoidal separation is zero or not available - use approx. EGM96 value
      */
@@ -308,6 +349,7 @@ void normal_loop()
       /* we can assume the GPS unit is giving ellipsoid height */
       ThisAircraft.altitude -= ThisAircraft.geoid_separation;
     }
+#endif /* EXCLUDE_EGM96 */
 
     RF_Transmit(RF_Encode(&ThisAircraft), true);
   }
@@ -337,10 +379,13 @@ void normal_loop()
     LEDTimeMarker = millis();
   }
 
-  if (isTimeToExport() && isValidFix()) {
+  if (isTimeToExport()) {
     NMEA_Export();
-    GDL90_Export();
-    D1090_Export();
+
+    if (isValidFix()) {
+      GDL90_Export();
+      D1090_Export();
+    }
     ExportTimeMarker = millis();
   }
 
@@ -351,7 +396,8 @@ void normal_loop()
 
 }
 
-void uav_loop()
+#if !defined(EXCLUDE_MAVLINK)
+void uav()
 {
   bool success = false;
 
@@ -385,8 +431,10 @@ void uav_loop()
 
   ClearExpired();
 }
+#endif /* EXCLUDE_MAVLINK */
 
-void bridge_loop()
+#if !defined(EXCLUDE_WIFI)
+void bridge()
 {
   bool success;
 
@@ -421,8 +469,9 @@ void bridge_loop()
     LEDTimeMarker = millis();
   }
 }
+#endif /* EXCLUDE_WIFI */
 
-void watchout_loop()
+void watchout()
 {
   bool success;
 
@@ -449,10 +498,12 @@ void watchout_loop()
   }
 }
 
+#if !defined(EXCLUDE_TEST_MODE)
+
 unsigned int pos_ndx = 0;
 unsigned long TxPosUpdMarker = 0;
 
-void txrx_test_loop()
+void txrx_test()
 {
   bool success = false;
 #if DEBUG_TIMING
@@ -529,7 +580,9 @@ void txrx_test_loop()
   export_start_ms = millis();
 #endif
   if (isTimeToExport()) {
+#if defined(USE_NMEALIB)
     NMEA_Position();
+#endif
     NMEA_Export();
     GDL90_Export();
     D1090_Export();
@@ -597,3 +650,5 @@ void txrx_test_loop()
 
   ClearExpired();
 }
+
+#endif /* EXCLUDE_TEST_MODE */

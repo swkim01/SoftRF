@@ -8,6 +8,7 @@ Areas where contributions are welcomed by the project's developer:
 2. **R**esearch **&** **D**evelopment
     - improvement of "legacy" protocol compatibility
     - improvement of Australia, South and North America channel hopping compliance
+    - create, deploy for public use and maintain an SD card image, containing "ready-to-go" setup for [Raspberry Edition](https://github.com/lyusupov/SoftRF/wiki/Raspberry-Edition)
     - create and maintain WebUI for [Raspberry Edition](https://github.com/lyusupov/SoftRF/wiki/Raspberry-Edition)
     - add and maintain support for SoftRF in [Stratux](https://github.com/cyoung/stratux) WebUI
     - tests development and maintenance
@@ -16,3 +17,5 @@ Areas where contributions are welcomed by the project's developer:
     - create and maintain [OGNTP-2](https://github.com/pjalocha/esp32-ogn-tracker/blob/master/main/ogn2.h) radio protocol implementaton
     - create and maintain MAVLINK **V2** data link protocol implementaton
     - create and maintain data logger (in IGC format) for [SkyView EZ](https://github.com/lyusupov/SoftRF/wiki/SkyView-EZ)
+    - create and maintain settings menu UI for [SkyView Pi](https://github.com/lyusupov/SoftRF/wiki/SkyView-Pi) and/or
+        - connected [SoftRF Dongle](https://github.com/lyusupov/SoftRF/wiki/Dongle-Edition)

@@ -1,6 +1,6 @@
 /*
  * JSONHelper.h
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,14 @@
 #define JSONHELPER_H
 
 #include <ArduinoJson.h>
-#include "SoftRF.h"
+
+#if defined(ARDUINO)
+#include <Arduino.h>
+#endif /* ARDUINO */
+
+#if defined(RASPBERRY_PI)
+#include <raspi/raspi.h>
+#endif /* RASPBERRY_PI */
 
 #define JSON_BUFFER_SIZE  65536
 #define isValidGPSDFix() (hasValidGPSDFix)

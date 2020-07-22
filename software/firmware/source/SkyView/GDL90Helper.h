@@ -1,6 +1,6 @@
 /*
  * GDL90Helper.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 
 #define GDL90_DST_PORT    4000
 
-#define GDL90_EXP_TIME  3500 /* 3.5 seconds */
+#define GDL90_EXP_TIME  4500 /* 4.5 seconds */
 
 void GDL90_setup(void);
 void GDL90_loop(void);

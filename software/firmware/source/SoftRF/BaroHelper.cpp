@@ -1,6 +1,6 @@
 /*
  * BaroHelper.cpp
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,19 +16,38 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <Adafruit_BMP085.h>
-#include <Adafruit_BMP280.h>
-#include <Adafruit_MPL3115A2.h>
-#include <TinyGPS++.h>
-
 #include "SoCHelper.h"
+
 #include "BaroHelper.h"
+
+#if defined(EXCLUDE_BMP180) && defined(EXCLUDE_BMP280) && defined(EXCLUDE_MPL3115A2)
+byte Baro_setup()    {return BARO_MODULE_NONE;}
+void Baro_loop()     {}
+#else
+
+#if !defined(EXCLUDE_BMP180)
+#include <Adafruit_BMP085.h>
+#endif /* EXCLUDE_BMP180 */
+#if !defined(EXCLUDE_BMP280)
+#include <Adafruit_BMP280.h>
+#endif /* EXCLUDE_BMP280 */
+#if !defined(EXCLUDE_MPL3115A2)
+#include <Adafruit_MPL3115A2.h>
+#endif /* EXCLUDE_MPL3115A2 */
+
+#include <TinyGPS++.h>
 
 barochip_ops_t *baro_chip = NULL;
 
+#if !defined(EXCLUDE_BMP180)
 Adafruit_BMP085 bmp180;
+#endif /* EXCLUDE_BMP180 */
+#if !defined(EXCLUDE_BMP280)
 Adafruit_BMP280 bmp280;
+#endif /* EXCLUDE_BMP280 */
+#if !defined(EXCLUDE_MPL3115A2)
 Adafruit_MPL3115A2 mpl3115a2 = Adafruit_MPL3115A2();
+#endif /* EXCLUDE_MPL3115A2 */
 
 static unsigned long BaroTimeMarker = 0;
 static float prev_pressure_altitude = 0;
@@ -40,6 +59,7 @@ static int avg_ndx = 0;
 /* 4 baro sensor readings per second */
 #define isTimeToBaro() ((millis() - BaroTimeMarker) > (1000 / VS_AVERAGING_FACTOR))
 
+#if !defined(EXCLUDE_BMP180)
 static bool bmp180_probe()
 {
   return bmp180.begin();
@@ -89,7 +109,9 @@ barochip_ops_t bmp180_ops = {
   bmp180_setup,
   bmp180_altitude
 };
+#endif /* EXCLUDE_BMP180 */
 
+#if !defined(EXCLUDE_BMP280)
 static bool bmp280_probe()
 {
   return (
@@ -130,7 +152,9 @@ barochip_ops_t bmp280_ops = {
   bmp280_setup,
   bmp280_altitude
 };
+#endif /* EXCLUDE_BMP280 */
 
+#if !defined(EXCLUDE_MPL3115A2)
 static bool mpl3115a2_probe()
 {
   return mpl3115a2.begin();
@@ -165,12 +189,29 @@ barochip_ops_t mpl3115a2_ops = {
   mpl3115a2_setup,
   mpl3115a2_altitude
 };
+#endif /* EXCLUDE_MPL3115A2 */
 
 bool Baro_probe()
 {
-  return ( (baro_chip = &bmp180_ops,    baro_chip->probe()) ||
+  return (
+#if !defined(EXCLUDE_BMP180)
+           (baro_chip = &bmp180_ops,    baro_chip->probe()) ||
+#else
+           false                                            ||
+#endif /* EXCLUDE_BMP180 */
+
+#if !defined(EXCLUDE_BMP280)
            (baro_chip = &bmp280_ops,    baro_chip->probe()) ||
-           (baro_chip = &mpl3115a2_ops, baro_chip->probe()) );
+#else
+           false                                            ||
+#endif /* EXCLUDE_BMP280 */
+
+#if !defined(EXCLUDE_MPL3115A2)
+           (baro_chip = &mpl3115a2_ops, baro_chip->probe())
+#else
+           false
+#endif /* EXCLUDE_MPL3115A2 */
+         );
 }
 
 byte Baro_setup()
@@ -231,3 +272,5 @@ void Baro_loop()
 #endif
   }
 }
+
+#endif /* EXCLUDE_BMP180 && EXCLUDE_BMP280 EXCLUDE_MPL3115A2 */

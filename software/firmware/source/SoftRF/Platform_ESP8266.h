@@ -1,6 +1,6 @@
 /*
  * Platform_ESP8266.h
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +25,22 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 
+//#define USE_EXP_SW_SERIAL
+
+#if defined(USE_EXP_SW_SERIAL)
 #include <Exp_SoftwareSerial.h>
+#else
+#include <SoftwareSerial.h>
+#endif
 #include <ESP8266FtpServer.h>
 #include <Adafruit_NeoPixel.h>
 
 /* Maximum of tracked flying objects is now SoC-specific constant */
 #define MAX_TRACKING_OBJECTS    8
+
+#define DEFAULT_SOFTRF_MODEL    SOFTRF_MODEL_STANDALONE
+
+#define EEPROM_commit()         EEPROM.commit()
 
 #define isValidFix()            isValidGNSSFix()
 
@@ -72,6 +82,7 @@
 #define SOC_GPIO_PIN_SDA      D2
 #define SOC_GPIO_PIN_SCL      D4
 
+#define SerialOutput          Serial
 #define UATSerial             Serial /* TBD */
 
 extern "C" {
@@ -79,10 +90,21 @@ extern "C" {
 }
 
 extern ESP8266WebServer server;
+#if defined(USE_EXP_SW_SERIAL)
 extern Exp_SoftwareSerial swSer;
+#else
+extern SoftwareSerial swSer;
+#endif
 extern Adafruit_NeoPixel strip;
 
-#define  USE_NMEALIB
+#define USE_NMEALIB
+//#define USE_BASICMAC
+
+#define EXCLUDE_CC13XX
+
+#if defined(pgm_read_float_aligned)
+#define pgm_read_float(addr)  pgm_read_float_aligned(addr)
+#endif
 
 #endif /* PLATFORM_ESP8266_H */
 

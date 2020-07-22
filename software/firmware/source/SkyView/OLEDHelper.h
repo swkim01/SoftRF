@@ -1,6 +1,6 @@
 /*
  * OLEDHelper.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,8 @@
 
 #ifndef OLEDHELPER_H
 #define OLEDHELPER_H
+
+#if defined(RASPBERRY_PI)
 
 #include <Adafruit_SSD1306.h>
 
@@ -39,5 +41,7 @@ void OLED_setup();
 void OLED_loop();
 
 extern Adafruit_SSD1306 odisplay;
+
+#endif /* RASPBERRY_PI */
 
 #endif /* OLEDHELPER_H */

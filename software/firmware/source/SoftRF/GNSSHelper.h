@@ -1,6 +1,6 @@
 /*
  * GNSSHelper.h
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,6 @@
 
 #include <TinyGPS++.h>
 
-#include "SoftRF.h"
-
 enum
 {
   GNSS_MODULE_NONE,
@@ -31,7 +29,8 @@ enum
   GNSS_MODULE_U7,   /* Ublox 7 */
   GNSS_MODULE_U8,   /* Ublox 8 */
   GNSS_MODULE_U9,   /* reserved for Ublox 9 */
-  GNSS_MODULE_MAV   /* MAVLink */
+  GNSS_MODULE_MAV,  /* MAVLink */
+  GNSS_MODULE_S7XG  /* S7XG */
 };
 
 /*
@@ -48,6 +47,7 @@ enum
                            (gnss.date.age()     <= NMEA_EXP_TIME))
 
 byte GNSS_setup      (void);
+void GNSS_loop       (void);
 void GNSS_fini       (void);
 void GNSSTimeSync    (void);
 void PickGNSSFix     (void);

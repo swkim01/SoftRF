@@ -1,6 +1,6 @@
 /*
  * Platform_RPi.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,14 +33,17 @@
 #include <string.h>
 #include <sqlite3.h>
 
+#include <ArduinoJson.h>
+
 #include "SoCHelper.h"
 #include "NMEAHelper.h"
-#include "EPDHelper.h"
 #include "TrafficHelper.h"
 #include "EEPROMHelper.h"
 #include "WiFiHelper.h"
 #include "GDL90Helper.h"
 #include "BatteryHelper.h"
+#include "JSONHelper.h"
+#include "EPDHelper.h"
 #include "OLEDHelper.h"
 
 #include "SkyView.h"
@@ -49,7 +52,9 @@
 #include <sndfile.h>
 #include <string.h>
 
-TTYSerial SerialInput("/dev/ttyUSB0");
+#include <iostream>
+
+TTYSerial SerialInput("/dev/ttyACM0");
 
 static const uint8_t SS    = 8; // pin 24
 
@@ -61,10 +66,13 @@ Adafruit_SSD1306 odisplay(SCREEN_WIDTH, SCREEN_HEIGHT,
   &SPI, /*DC=*/ 25, /*RST=*/ 17, /*CS=*/ SS);
 
 lmic_pinmap lmic_pins = {
-    .nss = LMIC_UNUSED_PIN,
-    .rxtx = { LMIC_UNUSED_PIN, LMIC_UNUSED_PIN },
-    .rst = LMIC_UNUSED_PIN,
-    .dio = {LMIC_UNUSED_PIN, LMIC_UNUSED_PIN, LMIC_UNUSED_PIN},
+    .nss  = LMIC_UNUSED_PIN,
+    .txe  = LMIC_UNUSED_PIN,
+    .rxe  = LMIC_UNUSED_PIN,
+    .rst  = LMIC_UNUSED_PIN,
+    .dio  = {LMIC_UNUSED_PIN, LMIC_UNUSED_PIN, LMIC_UNUSED_PIN},
+    .busy = LMIC_UNUSED_PIN,
+    .tcxo = LMIC_UNUSED_PIN,
 };
 
 void os_getArtEui (u1_t* buf) { }
@@ -91,11 +99,88 @@ hardware_info_t hw_info = {
 
 static sqlite3 *fln_db;
 static sqlite3 *ogn_db;
-static sqlite3 *paw_db;
+static sqlite3 *icao_db;
+
+std::string input_line;
+
+//-------------------------------------------------------------------------
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2015 Andrew Duncan
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+//-------------------------------------------------------------------------
+
+#include <fcntl.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <sys/ioctl.h>
+
+static uint32_t SerialNumber = 0;
+
+void RPi_SerialNumber(void)
+{
+    int fd = open("/dev/vcio", 0);
+    if (fd == -1)
+    {
+        perror("open /dev/vcio");
+        exit(EXIT_FAILURE);
+    }
+
+    uint32_t property[32] =
+    {
+        0x00000000,
+        0x00000000,
+        0x00010004,
+        0x00000010,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000
+    };
+
+    property[0] = 10 * sizeof(property[0]);
+
+    if (ioctl(fd, _IOWR(100, 0, char *), property) == -1)
+    {
+        perror("ioctl");
+        exit(EXIT_FAILURE);
+    }
+
+    close(fd);
+
+    SerialNumber = property[5];
+}
+
+//----- end of MIT License ------------------------------------------------
 
 static void RPi_setup()
 {
-
   eeprom_block.field.settings.adapter         = ADAPTER_WAVESHARE_PI_HAT_2_7;
 
   eeprom_block.field.settings.connection      = CON_SERIAL;
@@ -103,13 +188,8 @@ static void RPi_setup()
   eeprom_block.field.settings.protocol        = PROTOCOL_NMEA;
   eeprom_block.field.settings.orientation     = DIRECTION_NORTH_UP;
 
-  strcpy(eeprom_block.field.settings.ssid,      DEFAULT_AP_SSID);
-  strcpy(eeprom_block.field.settings.psk,       DEFAULT_AP_PSK);
-
-  eeprom_block.field.settings.bluetooth       = BLUETOOTH_OFF;
-
-  strcpy(eeprom_block.field.settings.bt_name,   DEFAULT_BT_NAME);
-  strcpy(eeprom_block.field.settings.bt_key,    DEFAULT_BT_KEY);
+  strcpy(eeprom_block.field.settings.server,    DEFAULT_AP_SSID);
+  strcpy(eeprom_block.field.settings.key,       DEFAULT_AP_PSK);
 
   eeprom_block.field.settings.units           = UNITS_METRIC;
   eeprom_block.field.settings.vmode           = VIEW_MODE_RADAR;
@@ -118,6 +198,12 @@ static void RPi_setup()
   eeprom_block.field.settings.idpref          = ID_REG;
   eeprom_block.field.settings.voice           = VOICE_1;
   eeprom_block.field.settings.aghost          = ANTI_GHOSTING_OFF;
+
+  eeprom_block.field.settings.filter          = TRAFFIC_FILTER_OFF;
+  eeprom_block.field.settings.power_save      = POWER_SAVE_NONE;
+  eeprom_block.field.settings.team            = 0;
+
+  RPi_SerialNumber();
 }
 
 static void RPi_fini()
@@ -128,7 +214,7 @@ static void RPi_fini()
 
 static uint32_t RPi_getChipId()
 {
-  return gethostid();
+  return SerialNumber ? SerialNumber : gethostid();
 }
 
 static void RPi_swSer_begin(unsigned long baud)
@@ -156,6 +242,11 @@ static size_t RPi_WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
   return 0; /* TBD */
 }
 
+static int RPi_WiFi_clients_count()
+{
+  return 0;
+}
+
 static bool RPi_DB_init()
 {
   sqlite3_open("Aircrafts/fln.db", &fln_db);
@@ -175,11 +266,11 @@ static bool RPi_DB_init()
     return false;
   }
 
-  sqlite3_open("Aircrafts/paw.db", &paw_db);
+  sqlite3_open("Aircrafts/icao.db", &icao_db);
 
-  if (paw_db == NULL)
+  if (icao_db == NULL)
   {
-    printf("Failed to open PilotAware DB\n");
+    printf("Failed to open ICAO DB\n");
     sqlite3_close(fln_db);
     sqlite3_close(ogn_db);
     return false;
@@ -216,7 +307,7 @@ static bool RPi_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
     db_key  = "devices";
     db      = ogn_db;
     break;
-  case DB_PAW:
+  case DB_ICAO:
     switch (settings->idpref)
     {
     case ID_TAIL:
@@ -231,7 +322,7 @@ static bool RPi_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
       break;
     }
     db_key  = "aircrafts";
-    db      = paw_db;
+    db      = icao_db;
     break;
   case DB_FLN:
   default:
@@ -299,8 +390,8 @@ static void RPi_DB_fini()
     sqlite3_close(ogn_db);
   }
 
-  if (paw_db != NULL) {
-    sqlite3_close(paw_db);
+  if (icao_db != NULL) {
+    sqlite3_close(icao_db);
   }
 }
 
@@ -383,6 +474,9 @@ static void RPi_TTS(char *message)
         strcat(filename, WAV_FILE_SUFFIX);
         play_file(pcm_handle, filename, buf, frames);
         word = strtok (NULL, " ");
+
+        /* Poll input source(s) */
+        Input_loop();
     }
 
     snd_pcm_drain(pcm_handle);
@@ -530,6 +624,7 @@ const SoC_ops_t RPi_ops = {
   RPi_Battery_voltage,
   RPi_EPD_setup,
   RPi_WiFi_Receive_UDP,
+  RPi_WiFi_clients_count,
   RPi_DB_init,
   RPi_DB_query,
   RPi_DB_fini,
@@ -538,20 +633,94 @@ const SoC_ops_t RPi_ops = {
   RPi_Button_loop,
   RPi_Button_fini,
   RPi_WDT_setup,
-  RPi_WDT_fini
+  RPi_WDT_fini,
+  NULL
 };
 
-int main()
+static bool inputAvailable()
 {
+  struct timeval tv;
+  fd_set fds;
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  FD_ZERO(&fds);
+  FD_SET(STDIN_FILENO, &fds);
+  select(STDIN_FILENO+1, &fds, NULL, NULL, &tv);
+  return (FD_ISSET(0, &fds));
+}
+
+static void RPi_ParseSettings()
+{
+  if (inputAvailable()) {
+    std::getline(std::cin, input_line);
+    const char *str = input_line.c_str();
+    int len = input_line.length();
+
+    if (str[0] == '{') {
+      // JSON input
+
+      JsonObject& root = jsonBuffer.parseObject(str);
+
+      JsonVariant msg_class = root["class"];
+
+      if (msg_class.success()) {
+        const char *msg_class_s = msg_class.as<char*>();
+
+        if (!strcmp(msg_class_s,"SKYVIEW")) {
+          parseSettings(root);
+        }
+      }
+
+      jsonBuffer.clear();
+    }
+  }
+}
+
+/* Poll input source(s) */
+void Input_loop() {
+  switch (settings->protocol)
+  {
+  case PROTOCOL_GDL90:
+    GDL90_loop();
+    break;
+  case PROTOCOL_NMEA:
+  default:
+    NMEA_loop();
+    break;
+  }
+}
+
+int main(int argc, char *argv[])
+{
+  bool isSysVinit = false;
+  int opt;
+
+  while ((opt = getopt(argc, argv, "b")) != -1) {
+      switch (opt) {
+      case 'b': isSysVinit = true; break;
+      default: break;
+      }
+  }
+
   // Init GPIO bcm
   if (!bcm2835_init()) {
       fprintf( stderr, "bcm2835_init() Failed\n\n" );
       exit(EXIT_FAILURE);
   }
 
-  Serial.begin(38400);
+  Serial.begin(SERIAL_OUT_BR);
 
   hw_info.soc = SoC_setup(); // Has to be very first procedure in the execution order
+
+  Serial.println();
+  Serial.print(F(SKYVIEW_IDENT));
+  Serial.print(SoC->name);
+  Serial.print(F(" FW.REV: " SKYVIEW_FIRMWARE_VERSION " DEV.ID: "));
+  Serial.println(String(SoC->getChipId(), HEX));
+  Serial.println(F("Copyright (C) 2019-2020 Linar Yusupov. All rights reserved."));
+  Serial.flush();
+
+  RPi_ParseSettings();
 
   Battery_setup();
   SoC->Button_setup();
@@ -562,7 +731,7 @@ int main()
     Serial.print(F("Intializing E-ink display module (may take up to 10 seconds)... "));
     Serial.flush();
 
-    hw_info.display = EPD_setup();
+    hw_info.display = EPD_setup(!isSysVinit);
     if (hw_info.display != DISPLAY_NONE) {
       Serial.println(F(" done."));
     } else {
@@ -576,6 +745,15 @@ int main()
     break;
   default:
     break;
+  }
+
+  if (isSysVinit) {
+    if (hw_info.display == DISPLAY_EPD_2_7) {
+      EPD_text_Draw_Message("PLEASE,", "WAIT");
+    }
+
+    SoC->Button_fini();
+    SoC_fini();
   }
 
   switch (settings->protocol)
@@ -605,16 +783,7 @@ int main()
 
     SoC->Button_loop();
 
-    switch (settings->protocol)
-    {
-    case PROTOCOL_GDL90:
-      GDL90_loop();
-      break;
-    case PROTOCOL_NMEA:
-    default:
-      NMEA_loop();
-      break;
-    }
+    Input_loop();
 
     Traffic_loop();
 

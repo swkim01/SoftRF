@@ -1,6 +1,6 @@
 /*
  * Platform_RPi.h
- * Copyright (C) 2018-2019 Linar Yusupov
+ * Copyright (C) 2018-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,10 +31,10 @@
 #define WAV_FILE_PREFIX         "Audio/"
 
 /* Waveshare Pi HAT 2.7" buttons mapping */
-#define SOC_GPIO_BUTTON_MODE    5
-#define SOC_GPIO_BUTTON_UP      6
-#define SOC_GPIO_BUTTON_DOWN    13
-#define SOC_GPIO_BUTTON_4       19   /* not assigned yet */
+#define SOC_GPIO_BUTTON_MODE    RPI_V2_GPIO_P1_29
+#define SOC_GPIO_BUTTON_UP      RPI_V2_GPIO_P1_31
+#define SOC_GPIO_BUTTON_DOWN    RPI_V2_GPIO_P1_33
+#define SOC_GPIO_BUTTON_4       RPI_V2_GPIO_P1_35
 
 extern TTYSerial SerialInput;
 

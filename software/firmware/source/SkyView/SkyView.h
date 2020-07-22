@@ -1,6 +1,6 @@
 /*
  * SkyView.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,15 +19,18 @@
 #ifndef SKYVIEW_H
 #define SKYVIEW_H
 
-#define SKYVIEW_FIRMWARE_VERSION  "0.9"
+#define SKYVIEW_FIRMWARE_VERSION  "0.10"
+#define SKYVIEW_IDENT     "SkyView-"
 
 #define DEFAULT_AP_SSID   "SoftRF-abc123"
 #define DEFAULT_AP_PSK    "12345678"
-#define DEFAULT_BT_NAME   "SoftRF-abc123"
-#define DEFAULT_BT_KEY    "1234"
 
 #define RELAY_DST_PORT    12390
 #define RELAY_SRC_PORT    (RELAY_DST_PORT - 1)
+
+/* SoftRF serial output defaults */
+#define SERIAL_OUT_BR     38400
+#define SERIAL_OUT_BITS   SERIAL_8N1
 
 #define DATA_TIMEOUT      2000 /* 2.0 seconds */
 
@@ -53,7 +56,9 @@ enum
 	SOFTRF_MODEL_PRIME_MK2,
 	SOFTRF_MODEL_RASPBERRY,
 	SOFTRF_MODEL_UAT,
-	SOFTRF_MODEL_SKYVIEW
+	SOFTRF_MODEL_SKYVIEW,
+	SOFTRF_MODEL_RETRO,
+	SOFTRF_MODEL_SKYWATCH
 };
 
 enum
@@ -61,6 +66,7 @@ enum
 	HW_REV_UNKNOWN,
 	HW_REV_DEVKIT,
 	HW_REV_T5S_1_9,
+	HW_REV_T5S_2_8,
 	HW_REV_T8_1_8
 };
 
@@ -87,7 +93,8 @@ enum
 	CON_SERIAL,
 	CON_WIFI_UDP,
 	CON_WIFI_TCP,
-	CON_BLUETOOTH
+	CON_BLUETOOTH_SPP,
+	CON_BLUETOOTH_LE
 };
 
 enum
@@ -136,17 +143,20 @@ enum
  * 'Radar view' scale factor (outer circle diameter)
  *
  * Metric and Mixed:
- *  LOW    - 10 KM diameter (5 KM radius)
- *  MEDIUM -  4 KM diameter (2 KM radius)
- *  HIGH   -  2 KM diameter (1 KM radius)
+ *  LOWEST - 20 KM diameter (10 KM radius)
+ *  LOW    - 10 KM diameter ( 5 KM radius)
+ *  MEDIUM -  4 KM diameter ( 2 KM radius)
+ *  HIGH   -  2 KM diameter ( 1 KM radius)
  *
  * Imperial:
+ *  LOWEST - 10 NM diameter (  5 NM radius)
  *  LOW    -  5 NM diameter (2.5 NM radius)
  *  MEDIUM -  2 NM diameter (  1 NM radius)
  *  HIGH   -  1 NM diameter (0.5 NM radius)
  */
 enum
 {
+	ZOOM_LOWEST,
 	ZOOM_LOW,
 	ZOOM_MEDIUM,
 	ZOOM_HIGH
@@ -178,20 +188,30 @@ enum
 
 enum
 {
-	BLUETOOTH_OFF,
-	BLUETOOTH_SPP
+	POWER_SAVE_NONE = 0,
+	POWER_SAVE_WIFI = 1,
+	POWER_SAVE_GNSS = 2
 };
 
 enum
 {
+	TRAFFIC_FILTER_OFF,
+	TRAFFIC_FILTER_500M,
+	TRAFFIC_FILTER_1500M
+};
+
+enum
+{
+	DB_NONE,
 	DB_AUTO,
 	DB_FLN,
 	DB_OGN,
-	DB_PAW
+	DB_ICAO
 };
 
 extern hardware_info_t hw_info;
 
 extern void shutdown(const char *);
+extern void Input_loop(void);
 
 #endif /* SKYVIEW_H */

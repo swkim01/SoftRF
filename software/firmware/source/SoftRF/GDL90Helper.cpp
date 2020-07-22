@@ -1,6 +1,6 @@
 /*
  * GDL90Helper.cpp
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * Inspired by Eric's Dey Python GDL-90 encoder:
  * https://github.com/etdey/gdl90
@@ -23,11 +23,10 @@
 #include <lib_crc.h>
 #include <protocol.h>
 
+#include "SoCHelper.h"
 #include "GDL90Helper.h"
 #include "GNSSHelper.h"
 #include "EEPROMHelper.h"
-#include "SoftRF.h"
-#include "SoCHelper.h"
 #include "WiFiHelper.h"
 #include "TrafficHelper.h"
 #include "Protocol_Legacy.h"
@@ -433,7 +432,7 @@ static void GDL90_Out(byte *buf, size_t size)
     {
     case GDL90_UART:
       {
-        Serial.write(buf, size);
+        SerialOutput.write(buf, size);
       }
       break;
     case GDL90_UDP:

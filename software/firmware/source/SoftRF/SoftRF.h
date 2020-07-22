@@ -1,6 +1,6 @@
 /*
  * SoftRF.h
- * Copyright (C) 2016-2019 Linar Yusupov
+ * Copyright (C) 2016-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,16 +23,16 @@
 #include <Arduino.h>
 #endif /* ARDUINO */
 
-#if defined(ENERGIA_ARCH_CC13XX)
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2)
 #include <TimeLib.h>
-#endif /* ENERGIA_ARCH_CC13XX */
+#endif /* ENERGIA_ARCH_CC13XX || ENERGIA_ARCH_CC13X2 */
 
 #if defined(RASPBERRY_PI)
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "1.0-rc6"
-#define SOFTRF_UAT_IDENT  "SoftRF-UAT"
+#define SOFTRF_FIRMWARE_VERSION "1.0-rc8"
+#define SOFTRF_IDENT            "SoftRF-"
 
 #define ENTRY_EXPIRATION_TIME   10 /* seconds */
 #define LED_EXPIRATION_TIME     5 /* seconds */
@@ -67,6 +67,41 @@
 #define GDL90_DST_PORT    4000
 #define NMEA_UDP_PORT     10110
 #define NMEA_TCP_PORT     2000
+
+/*
+ * Serial I/O default values.
+ * Can be overridden by platfrom-specific code.
+ */
+#if !defined(SERIAL_IN_BR)
+/*
+ * 9600 is default value of NMEA baud rate
+ * for most of GNSS modules
+ * being used in SoftRF project
+ */
+#define SERIAL_IN_BR      9600
+#endif
+#if !defined(SERIAL_IN_BITS)
+#define SERIAL_IN_BITS    SERIAL_8N1
+#endif
+
+/*
+ * 38400 is known as maximum baud rate
+ * that HC-05 Bluetooth module
+ * can handle without symbols loss.
+ *
+ * Applicable for Standalone Edition. Inherited by most of other SoftRF platforms.
+ */
+#define STD_OUT_BR        38400
+#define STD_OUT_BITS      SERIAL_8N1
+
+#if !defined(SERIAL_OUT_BR)
+#define SERIAL_OUT_BR     STD_OUT_BR
+#endif
+#if !defined(SERIAL_OUT_BITS)
+#define SERIAL_OUT_BITS   STD_OUT_BITS
+#endif
+
+#define UAT_RECEIVER_BR   2000000
 
 #if defined(PREMIUM_PACKAGE) && !defined(RASPBERRY_PI)
 #define ENABLE_AHRS
@@ -141,7 +176,13 @@ enum
 	SOFTRF_MODEL_UAV,
 	SOFTRF_MODEL_PRIME_MK2,
 	SOFTRF_MODEL_RASPBERRY,
-	SOFTRF_MODEL_UAT
+	SOFTRF_MODEL_UAT,
+	SOFTRF_MODEL_SKYVIEW,
+	SOFTRF_MODEL_RETRO,
+	SOFTRF_MODEL_SKYWATCH,
+	SOFTRF_MODEL_DONGLE,
+	SOFTRF_MODEL_MULTI,
+	SOFTRF_MODEL_UNI
 };
 
 extern ufo_t ThisAircraft;

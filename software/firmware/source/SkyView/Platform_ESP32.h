@@ -1,6 +1,6 @@
 /*
  * Platform_ESP32.h
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,8 +34,10 @@
 #define SerialInput           Serial1
 
 /* Peripherals */
-#define SOC_GPIO_PIN_GNSS_RX  21 /* TBD */
-#define SOC_GPIO_PIN_GNSS_TX  22 /* TBD */
+#define SOC_GPIO_PIN_GNSS_RX  21
+#define SOC_GPIO_PIN_GNSS_TX  22
+
+#define SOC_BUTTON_MODE_DEF   0
 
 /* TTGO T5 and T5S SPI pins mapping */
 #define SOC_GPIO_PIN_MOSI_T5S 23
@@ -68,11 +70,17 @@
 /* TTGO T5S green LED mapping */
 #define SOC_GPIO_PIN_LED_T5S  22
 
+/* Boya Microelectronics Inc. */
+#define BOYA_ID                 0x68
+#define BOYA_BY25Q32AL          0x4016
+
 #define MakeFlashId(v,d)      ((v  << 16) | d)
 #define CCCC(c1, c2, c3, c4)  ((c4 << 24) | (c3 << 16) | (c2 << 8) | c1)
 
 #define MAX_FILENAME_LEN      64
 #define WAV_FILE_PREFIX       "/Audio/"
+
+#define POWER_SAVING_WIFI_TIMEOUT 600000UL /* 10 minutes */
 
 /* these are data structures to process wav file */
 typedef enum headerState_e {

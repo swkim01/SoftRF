@@ -1,3 +1,4 @@
+#ifdef ENERGIA_ARCH_CC13XX
 /*
  * Copyright (c) 2015-2016, Texas Instruments Incorporated
  * All rights reserved.
@@ -30,7 +31,6 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define DEVICE_FAMILY cc13x0
 /***** Includes *****/
 #include "EasyLink.h"
 
@@ -365,6 +365,7 @@ EasyLink_Status EasyLink_init(EasyLink_PhyType ui32ModType)
         memcpy(&EasyLink_cmdPropRxAdv, &RF_cmdPropRxAdv, sizeof(rfc_CMD_PROP_RX_ADV_t));
         memcpy(&EasyLink_cmdPropTx, &RF_cmdPropTx, sizeof(rfc_CMD_PROP_TX_t));
     }
+#if 0
     else if ( (ui32ModType == EasyLink_Phy_50kbps2gfsk) && (ChipInfo_GetChipType() != CHIP_TYPE_CC2650) )
     {
         memcpy(&EasyLink_cmdPropRadioSetup.divSetup,
@@ -395,6 +396,7 @@ EasyLink_Status EasyLink_init(EasyLink_PhyType ui32ModType)
         memcpy(&EasyLink_cmdPropRxAdv, RF_pCmdPropRxAdv_preDef, sizeof(rfc_CMD_PROP_RX_ADV_t));
         memcpy(&EasyLink_cmdPropTx, RF_pCmdPropTx_preDef, sizeof(rfc_CMD_PROP_TX_t));
     }
+#endif
     else
     {
         if (busyMutex != NULL)
@@ -1114,3 +1116,4 @@ EasyLink_Status EasyLink_getIeeeAddr(uint8_t *ieeeAddr)
 
     return status;
 }
+#endif //DEVICE_FAMILY == cc13x0

@@ -1,6 +1,6 @@
 /*
  * NMEAHelper.cpp
- * Copyright (C) 2019 Linar Yusupov
+ * Copyright (C) 2019-2020 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -150,19 +150,22 @@ static void NMEA_Parse_Character(char c)
 
         fo.timestamp = now();
 
-        for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
-
-          if (Container[i].ID == fo.ID) {
-            Container[i] = fo;
-            break;
-          } else {
-            if (now() - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+        if ( settings->filter == TRAFFIC_FILTER_OFF  ||
+            (settings->filter == TRAFFIC_FILTER_500M &&
+                          fo.RelativeVertical > -500 &&
+                          fo.RelativeVertical <  500) ) {
+          for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
+            if (Container[i].ID == fo.ID) {
               Container[i] = fo;
               break;
+            } else {
+              if (now() - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+                Container[i] = fo;
+                break;
+              }
             }
           }
         }
-
       } else if (S_RX.isUpdated()) {
 
         NMEA_Status.timestamp = now();
@@ -235,7 +238,9 @@ static void NMEA_Parse_Character(char c)
 void NMEA_setup()
 {
   if (settings->protocol == PROTOCOL_NMEA) {
-    if (settings->connection == CON_SERIAL) {
+    switch (settings->connection)
+    {
+    case CON_SERIAL:
       uint32_t SerialBaud;
 
       switch (settings->baudrate)
@@ -265,6 +270,17 @@ void NMEA_setup()
       }
 
       SoC->swSer_begin(SerialBaud);
+      break;
+    case CON_BLUETOOTH_SPP:
+    case CON_BLUETOOTH_LE:
+      if (SoC->Bluetooth) {
+        SoC->Bluetooth->setup();
+      }
+      break;
+    case CON_NONE:
+    case CON_WIFI_UDP:
+    default:
+      break;
     }
 
     NMEA_TimeMarker = millis();
@@ -284,6 +300,18 @@ void NMEA_loop()
       NMEA_Parse_Character(c);
       NMEA_TimeMarker = millis();
     }
+    /* read data from microUSB port */
+#if !defined(RASPBERRY_PI)
+    if ((void *) &Serial != (void *) &SerialInput)
+#endif
+    {
+      while (Serial.available() > 0) {
+        char c = Serial.read();
+//        Serial.print(c);
+        NMEA_Parse_Character(c);
+        NMEA_TimeMarker = millis();
+      }
+    }
     break;
   case CON_WIFI_UDP:
     size = SoC->WiFi_Receive_UDP((uint8_t *) UDPpacketBuffer, sizeof(UDPpacketBuffer));
@@ -293,6 +321,17 @@ void NMEA_loop()
         NMEA_Parse_Character(UDPpacketBuffer[i]);
       }
       NMEA_TimeMarker = millis();
+    }
+    break;
+  case CON_BLUETOOTH_SPP:
+  case CON_BLUETOOTH_LE:
+    if (SoC->Bluetooth) {
+      while (SoC->Bluetooth->available() > 0) {
+        char c = SoC->Bluetooth->read();
+        Serial.print(c);
+        NMEA_Parse_Character(c);
+        NMEA_TimeMarker = millis();
+      }
     }
     break;
   case CON_NONE:
