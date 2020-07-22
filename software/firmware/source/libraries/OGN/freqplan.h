@@ -15,7 +15,8 @@ enum
   RF_BAND_RU   = 5, /* 868.8 MHz band */
   RF_BAND_CN   = 6, /* 470 MHz band */
   RF_BAND_UK   = 7, /* 869.52 MHz band */
-  RF_BAND_IN   = 8  /* 866.0 MHz band */
+  RF_BAND_IN   = 8, /* 866.0 MHz band */
+  RF_BAND_KR   = 9  /* 920.0 MHz band */
 };
 
 class FreqPlan
@@ -58,6 +59,9 @@ class FreqPlan
         case RF_BAND_IN:
           { BaseFreq=866000000; ChanSepar=200000; Channels= 1; MaxTxPower = 30; } // India
           break;
+        case RF_BAND_KR:
+          { BaseFreq=920900000; ChanSepar=200000; Channels= 6; MaxTxPower = 30; } // Korea
+          break;
         case RF_BAND_EU:
         default:
           { BaseFreq=868200000; ChanSepar=200000; Channels= 2; MaxTxPower = 14; } // Europe
@@ -71,10 +75,10 @@ class FreqPlan
    const char *getPlanName(void) { return getPlanName(Plan); }
 
    static const char *getPlanName(uint8_t Plan)
-   { static const char *Name[9] = { "Default", "Europe/Africa",
+   { static const char *Name[10] = { "Default", "Europe/Africa",
        "USA/Canada", "Australia/South America", "New Zealand",
-       "Russia", "China", "PilotAware (UK)", "India" } ;
-     if(Plan>RF_BAND_IN) return 0;
+       "Russia", "China", "PilotAware (UK)", "India", "Korea" } ;
+     if(Plan>RF_BAND_KR) return 0;
      return Name[Plan]; }
 
    uint8_t getChannel  (uint32_t Time, uint8_t Slot=0, uint8_t OGN=1) const // OGN-tracker or FLARM, UTC time, slot: 0 or 1
@@ -102,6 +106,7 @@ class FreqPlan
      if( Latitude<(20*600000) )                                            // below 20deg latitude
      { if( ( Longitude>(164*600000)) && (Latitude<(-30*600000)) && (Latitude>(-48*600000)) ) return RF_BAND_NZ;  // => New Zealand
        return RF_BAND_AU; }                                                // => Australia + South America: upper half of 915MHz band
+     if( (Longitude>(125*600000)) && (Longitude<(130*600000)) && (Latitude>(33*600000)) && (Latitude<(39*600000)) ) return RF_BAND_KR;  // => Korea
      return RF_BAND_US; }                                                  // => USA/Canada: full 915MHz band
 
   private:
