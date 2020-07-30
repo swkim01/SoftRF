@@ -74,6 +74,7 @@ void SPIClass::beginTransaction(SPISettings settings) {
   bcm2835_gpio_write( 8, HIGH );
 
   // CS line as output
+  if (cs == LMIC_UNUSED_PIN) return;
   if ( cs!=7 && cs!=8) {
     bcm2835_gpio_fsel( cs, BCM2835_GPIO_FSEL_OUTP );
     bcm2835_gpio_write( cs, HIGH);
